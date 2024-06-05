@@ -1,5 +1,7 @@
-#include "Transaction.h"
+#include "transaction.h"
 #include <tinycbor.h>
+
+
 
 #define CHECK_ERROR(proc) {\
   if( (err = proc) != 0) {\
@@ -13,6 +15,8 @@ uint8_t encode_buffer[1024];
 std::vector<uint8_t> stringToBytes(const std::string& str) {
     return std::vector<uint8_t>(str.begin(), str.end());
 }
+
+
 
 Transaction::Transaction(const std::string& canisterId, const std::string& request_type, std::string& method_name, const std::string& args){
     _canisterId = canisterId;
@@ -94,6 +98,3 @@ std::vector<uint8_t> Transaction::encode(){
 
 }
 
-void Transaction::sign(const std::string& private_key){
-
-}
