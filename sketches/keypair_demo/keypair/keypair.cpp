@@ -1,10 +1,9 @@
-#include "keypair.h"
-#include "mbedtls/entropy.h"
-#include "mbedtls/ctr_drbg.h"
-#include "mbedtls/ecdsa.h"
-#include <sstream>
-#include <iomanip>
+#include <mbedtls/ecdsa.h>
+#include <mbedtls/entropy.h>
+#include <mbedtls/ctr_drbg.h>
+#include <stdexcept>
 
+/*
 std::string bytesToHexString(const std::vector<uint8_t>& bytes) {
     std::stringstream ss;
     for(const auto& byte : bytes) {
@@ -26,217 +25,112 @@ std::vector<uint8_t> hexStringToBytes(const std::string& str) {
     }
     return bytes;
 }
+*/
+
+
 
 Keypair::Keypair(){
-    mbedtls_entropy_context entropy;
-    //mbedtls_ctr_drbg_context ctr_drbg;
-    const char *pers = "Keypair";
-
-    mbedtls_entropy_init(&entropy);
-    mbedtls_ctr_drbg_init(&ctr_drbg);
-
-    // Initialize random number generator
-    mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, (const unsigned char *) pers, strlen(pers));
-
-    // Generate a random number
-    unsigned char random_number[32];
-    mbedtls_ctr_drbg_random(&ctr_drbg, random_number, sizeof(random_number));
-
-    // Convert the random number to a string
-    std::string random_number_str((char*)random_number, sizeof(random_number));
-
-    // Pass the random number to the generate_key_pair function
-    auto keypair = generateKeyPair(random_number_str);
-
-    // Clean up
-    mbedtls_ctr_drbg_free(&ctr_drbg);
-    mbedtls_entropy_free(&entropy);
-}
-
-std::string Keypair::getRandom(){
+    int ret = 0;
     mbedtls_entropy_context entropy;
     mbedtls_ctr_drbg_context ctr_drbg;
-    const char *pers = "Keypair";
+    mbedtls_pk_context pk;
+    const char* pers = "ecdsa_keygen";
 
     mbedtls_entropy_init(&entropy);
     mbedtls_ctr_drbg_init(&ctr_drbg);
+    mbedtls_pk_init(&pk);
 
-    // Initialize random number generator
-    mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, (const unsigned char *) pers, strlen(pers));
+    // Seed the random number generator
+    if ((ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,reinterpret_cast<const unsigned char*>(pers), strlen(pers))) != 0) {
+        mbedtls_pk_free(&pk);
+        mbedtls_ctr_drbg_free(&ctr_drbg);
+        mbedtls_entropy_free(&entropy);
+        throw std::runtime_error("Failed to seed the random number generator");
+    }
 
-    // Generate a random number
-    unsigned char random_number[32];
-    mbedtls_ctr_drbg_random(&ctr_drbg, random_number, sizeof(random_number));
+    // Initialize the context for the public key algorithm
+    if ((ret = mbedtls_pk_setup(&pk, mbedtls_pk_info_from_type(MBEDTLS_PK_ECKEY))) != 0) {
+        mbedtls_pk_free(&pk);
+        mbedtls_ctr_drbg_free(&ctr_drbg);
+        mbedtls_entropy_free(&entropy);
+        throw std::runtime_error("Failed to initialize the public key context");
+    }
 
-    // Convert the random number to a string
-    std::string random_number_str((char*)random_number, sizeof(random_number));
+    // Generate the key pair on the specified curve (secp256k1)
+    if ((ret = mbedtls_ecp_gen_key(MBEDTLS_ECP_DP_SECP256K1, mbedtls_pk_ec(pk),
+                                   mbedtls_ctr_drbg_random, &ctr_drbg)) != 0) {
+        mbedtls_pk_free(&pk);
+        mbedtls_ctr_drbg_free(&ctr_drbg);
+        mbedtls_entropy_free(&entropy);
+        throw std::runtime_error("Failed to generate the key pair");
+    }
 
-    // Clean up
+    // Save private key to DER format
+    std::vector<unsigned char> private_key_buf(16000);
+    ret = mbedtls_pk_write_key_der(&pk, private_key_buf.data(), private_key_buf.size());
+    if (ret < 0) {
+        mbedtls_pk_free(&pk);
+        mbedtls_ctr_drbg_free(&ctr_drbg);
+        mbedtls_entropy_free(&entropy);
+         throw std::runtime_error("Failed to write the private key to DER format");
+    }
+    unsigned char* derPrivateKey = private_key_buf.data() + private_key_buf.size() - ret;
+    size_t len = ret;
+    _private_key_buf.resize(len);
+    std::copy(derPrivateKey, derPrivateKey + len, _private_key_buf.begin());
+
+   
+
+    // Save public key to DER format
+    std::vector<unsigned char> public_key_buf(16000);
+    ret = mbedtls_pk_write_pubkey_der(&pk, public_key_buf.data(), public_key_buf.size());
+    if (ret < 0) {
+        mbedtls_pk_free(&pk);
+        mbedtls_ctr_drbg_free(&ctr_drbg);
+        mbedtls_entropy_free(&entropy);
+         throw std::runtime_error("Failed to write the public key to DER format");
+    }
+    unsigned char* derPublicKey = public_key_buf.data() + public_key_buf.size() - ret;
+    len = ret;
+    _public_key_buf.resize(len);
+    std::copy(derPublicKey, derPublicKey + len, _public_key_buf.begin());
+
+    mbedtls_pk_free(&pk);
     mbedtls_ctr_drbg_free(&ctr_drbg);
     mbedtls_entropy_free(&entropy);
 
-    return random_number_str;
 }
 
-Keypair::Keypair(const std::string& private_random_number){
-    _keypair = generateKeyPair(private_random_number);
+
+
+Keypair::Keypair(const std::vector<unsigned char>& private_key_buf){
+     _private_key_buf.resize(private_key_buf.size());
+    std::copy(private_key_buf.begin(), private_key_buf.end(), _private_key_buf.begin());
+
+    // Parse the private key
+    mbedtls_pk_context pk;
+    mbedtls_pk_init(&pk);
+    int ret = mbedtls_pk_parse_key(&pk, _private_key_buf.data(), _private_key_buf.size(), nullptr, 0, nullptr, nullptr);    if (ret != 0) {
+        mbedtls_pk_free(&pk);
+        throw std::runtime_error("Failed to parse the private key");
+    }
+
+    // Write the public key to a buffer in DER format
+    std::vector<unsigned char> public_key_buf(16000);
+    ret = mbedtls_pk_write_pubkey_der(&pk, public_key_buf.data(), public_key_buf.size());
+    if (ret < 0) {
+        mbedtls_pk_free(&pk);
+        throw std::runtime_error("Failed to write the public key to a buffer");
+    }
+
+    // mbedtls_pk_write_pubkey_der writes to the end of the buffer, so we need to adjust the pointer and length
+    unsigned char* derPublicKey = public_key_buf.data() + public_key_buf.size() - ret;
+    size_t len = ret;
+
+    // Resize and copy the public key to _public_key_buf
+    _public_key_buf.resize(len);
+    std::copy(derPublicKey, derPublicKey + len, _public_key_buf.begin());
+
+    mbedtls_pk_free(&pk);
+
 }
-
-std::pair<std::vector<uint8_t>, std::vector<uint8_t>> Keypair::generateKeyPair(const std::string& private_random_number) {
-    mbedtls_entropy_context entropy;
-    mbedtls_ctr_drbg_context ctr_drbg;
-    mbedtls_ecdsa_context ctx;
-
-    const char *pers = "ecdsa";
-    unsigned char public_key[200];
-    unsigned char private_key[200];
-    size_t olen;
-
-    mbedtls_entropy_init(&entropy);
-    mbedtls_ctr_drbg_init(&ctr_drbg);
-    mbedtls_ecdsa_init(&ctx);
-
-    // Initialize random number generator with private_random_number
-    mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, 
-                          (const unsigned char *) private_random_number.c_str(), 
-                          private_random_number.size());
-
-    // Generate key pair
-    mbedtls_ecdsa_genkey(&ctx, MBEDTLS_ECP_DP_SECP256R1, mbedtls_ctr_drbg_random, &ctr_drbg);
-
-    // Write public key to public_key
-    mbedtls_ecp_point_write_binary(&ctx.grp, &ctx.Q, MBEDTLS_ECP_PF_UNCOMPRESSED, &olen, public_key, sizeof(public_key));
-
-    // Write private key to private_key
-    mbedtls_mpi_write_binary(&ctx.d, private_key, mbedtls_mpi_size(&ctx.d));
-
-    // Clean up
-    mbedtls_ecdsa_free(&ctx);
-    mbedtls_ctr_drbg_free(&ctr_drbg);
-    mbedtls_entropy_free(&entropy);
-
-    // Convert the public and private keys to std::vector<uint8_t> and return them
-    std::vector<uint8_t> public_key_vec(public_key, public_key + olen);
-    std::vector<uint8_t> private_key_vec(private_key, private_key + mbedtls_mpi_size(&ctx.d));
-    return std::make_pair(public_key_vec, private_key_vec);
-}
-
-std::pair<std::vector<uint8_t>, std::vector<uint8_t>> Keypair::generateKeyPair(const std::vector<uint8_t>& private_key_vec) {
-    mbedtls_ecdsa_context ctx;
-    mbedtls_ecdsa_init(&ctx);
-
-    // Convert private key to mbedtls_mpi
-    mbedtls_mpi private_key_mpi;
-    mbedtls_mpi_init(&private_key_mpi);
-    mbedtls_mpi_read_binary(&private_key_mpi, private_key_vec.data(), private_key_vec.size());
-
-    // Set the group (curve) to use
-    mbedtls_ecp_group_load(&ctx.grp, MBEDTLS_ECP_DP_SECP256R1);
-
-    // Generate the public key
-    mbedtls_ecp_mul(&ctx.grp, &ctx.Q, &private_key_mpi, &ctx.grp.G, NULL, NULL);
-
-    // Write public key to public_key
-    unsigned char public_key[200];
-    size_t olen;
-    mbedtls_ecp_point_write_binary(&ctx.grp, &ctx.Q, MBEDTLS_ECP_PF_UNCOMPRESSED, &olen, public_key, sizeof(public_key));
-
-    // Clean up
-    mbedtls_mpi_free(&private_key_mpi);
-    mbedtls_ecdsa_free(&ctx);
-
-    // Convert the public and private keys to std::vector<uint8_t> and return them
-    std::vector<uint8_t> public_key_vec(public_key, public_key + olen);
-    return std::make_pair(public_key_vec, private_key_vec);
-}
-
-void Keypair::generate(const std::string& private_random_number){
-    _keypair = generateKeyPair(private_random_number);
-}
-
-void Keypair::generate(const std::vector<uint8_t>& private_key_vec){
-    _keypair = generateKeyPair(private_key_vec);
-}
-
-std::vector<uint8_t> Keypair::getPublicKey(){
-    return _keypair.first;
-}
-
-std::vector<uint8_t> Keypair::getPrivateKey(){
-    return _keypair.second;
-}   
-
-std::string Keypair::getPublicKeyString(){
-    return bytesToHexString(_keypair.first);
-}
-
-std::string Keypair::getPrivateKeyString(){
-    return bytesToHexString(_keypair.second);
-}
-
-std::vector<uint8_t> Keypair::sign(const std::vector<uint8_t>& message){
-    mbedtls_ecdsa_context ctx;
-    mbedtls_ecdsa_init(&ctx);
-
-    // Convert private key to mbedtls_mpi
-    mbedtls_mpi private_key_mpi;
-    mbedtls_mpi_init(&private_key_mpi);
-    mbedtls_mpi_read_binary(&private_key_mpi, _keypair.second.data(), _keypair.second.size());
-
-    // Set the group (curve) to use
-    mbedtls_ecp_group_load(&ctx.grp, MBEDTLS_ECP_DP_SECP256R1);
-
-    // Set the private key
-    mbedtls_mpi_copy(&ctx.d, &private_key_mpi);
-
-    // Sign the message
-    unsigned char signature[200];
-    size_t olen;
-    mbedtls_ecdsa_write_signature(&ctx, MBEDTLS_MD_SHA256, message.data(), message.size(), signature, &olen, mbedtls_ctr_drbg_random, &ctr_drbg);
-
-    // Clean up
-    mbedtls_mpi_free(&private_key_mpi);
-    mbedtls_ecdsa_free(&ctx);
-
-    // Convert the signature to std::vector<uint8_t> and return it
-    std::vector<uint8_t> signature_vec(signature, signature + olen);
-    return signature_vec;
-}
-
-bool Keypair::verify(const std::vector<uint8_t>& message, const std::vector<uint8_t>& signature){
-    mbedtls_ecdsa_context ctx;
-    mbedtls_ecdsa_init(&ctx);
-
-    // Set the group (curve) to use
-    mbedtls_ecp_group_load(&ctx.grp, MBEDTLS_ECP_DP_SECP256R1);
-
-    // Convert public key to mbedtls_ecp_point
-    mbedtls_ecp_point public_key_point;
-    mbedtls_ecp_point_init(&public_key_point);
-    mbedtls_ecp_point_read_binary(&ctx.grp, &public_key_point, _keypair.first.data(), _keypair.first.size());
-
-    // Set the public key
-    mbedtls_ecp_copy(&ctx.Q, &public_key_point);
-
-    // Verify the signature
-    int ret = mbedtls_ecdsa_read_signature(&ctx, message.data(), message.size(), signature.data(), signature.size());
-
-    // Clean up
-    mbedtls_ecp_point_free(&public_key_point);
-    mbedtls_ecdsa_free(&ctx);
-
-    // Return true if the signature is valid, false otherwise
-    return ret == 0;
-}
-
-std::vector<uint8_t> Keypair::sign(const std::string& message){
-    std::vector<uint8_t> message_vec = stringToBytes(message);
-    std::vector<uint8_t> signature_vec = sign(message_vec);
-    return signature_vec;
-}
-
-bool Keypair::verify(const std::string& message, const std::vector<uint8_t>& signature){
-    std::vector<uint8_t> message_vec = stringToBytes(message);
-    return verify(message_vec, signature);
-}
-// Path: src/main.cpp

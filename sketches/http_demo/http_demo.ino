@@ -18,7 +18,7 @@ void setup() {
 
 void loop() {
   cnt++;
-  if(cnt==5){
+  if(cnt==3){
     // Connect to WiFi network
     Serial.println();
     Serial.print("Connecting to ");
@@ -58,7 +58,7 @@ void loop() {
     }
   } else {
     Serial.print("fetching in ");
-    Serial.print(5-cnt);
+    Serial.print(3-cnt);
     Serial.println(" s");
   }
   delay(1000);
