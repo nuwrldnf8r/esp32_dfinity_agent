@@ -3,10 +3,9 @@
 
 class Keypair {
 public:
-    
     Keypair();
     Keypair(const std::string& private_random_number);
-    std::string Keypair::getRandom();
+    std::string getRandom();
     std::pair<std::vector<uint8_t>, std::vector<uint8_t>> generate(const std::string& private_random_number); 
     std::pair<std::vector<uint8_t>, std::vector<uint8_t>> generate(const std::vector<uint8_t>& private_key_vec);
     void keypair::generate(const std::string& private_random_number);

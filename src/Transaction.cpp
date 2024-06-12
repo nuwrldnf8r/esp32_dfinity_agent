@@ -1,6 +1,6 @@
 #include "transaction.h"
 #include <tinycbor.h>
-
+#include "keypair.h"
 
 
 #define CHECK_ERROR(proc) {\
@@ -97,4 +97,37 @@ std::vector<uint8_t> Transaction::encode(){
     return encoded_data;
 
 }
+
+std::string Transaction::encode_for_sig() {
+    // Start with an empty vector of hashes
+    std::vector<std::string> hashes;
+
+    // For each field in the transaction data
+    // Note: You'll need to replace 'transaction_data' with the actual data structure
+    for (const auto& field : transaction_data) {
+        // Hash the field's name
+        std::string name_hash = hash(field.first);
+
+        // Hash the field's value
+        std::string value_hash = hash(field.second);
+
+        // Concatenate the name hash and the value hash
+        hashes.push_back(name_hash + value_hash);
+    }
+
+    // Sort the hashes
+    std::sort(hashes.begin(), hashes.end());
+
+    // Concatenate the sorted hashes and hash the result
+    std::string final_hash = hash(std::accumulate(hashes.begin(), hashes.end(), std::string("")));
+
+    return final_hash;
+}
+
+void Transaction::sign(const std::string& private_key){
+    Keypair keypair(private_key);
+    std::string signature = keypair.sign(encode());
+    _sender_sig = signature;
+}
+
 

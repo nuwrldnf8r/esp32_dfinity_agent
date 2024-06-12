@@ -8,7 +8,7 @@ public:
     Transaction(const std::string& sender, const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::string& args, const std::string& _sender_pubkey);
     
     std::vector<uint8_t> encode();
-    void addDelegation(const std::string& pubkey, const std::string& delegation);
+    //void addDelegation(const std::string& pubkey, const std::string& delegation);
     void sign(const std::string& private_key); 
 
 private:
@@ -21,6 +21,7 @@ private:
     std::string _args;
     std::string _sender_sig;
     std::vector<std::map<std::string, std::string>> sender_delegation;
+    std::string Transaction::encode_for_sig();
 };
 
 #endif // TRANSACTION_H
