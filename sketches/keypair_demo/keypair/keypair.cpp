@@ -134,3 +134,44 @@ Keypair::Keypair(const std::vector<unsigned char>& private_key_buf){
     mbedtls_pk_free(&pk);
 
 }
+
+std::vector<unsigned char> sign(const std::vector<unsigned char>& private_key, const std::vector<unsigned char>& message) {
+    mbedtls_pk_context pk;
+    mbedtls_pk_init(&pk);
+
+    // Parse the private key
+    int ret = mbedtls_pk_parse_key(&pk, private_key.data(), private_key.size(), nullptr, 0, nullptr, nullptr);
+    if (ret != 0) {
+        throw std::runtime_error("Failed to parse the private key");
+    }
+
+    // Make sure the key is an EC key
+    if (!mbedtls_pk_can_do(&pk, MBEDTLS_PK_ECKEY)) {
+        throw std::runtime_error("The key is not an EC key");
+    }
+
+    // Get the EC key
+    mbedtls_ecp_keypair* ec = mbedtls_pk_ec(pk);
+
+    /*
+    // Make sure the curve is secp256k1
+    if (ec->grp_id != MBEDTLS_ECP_DP_SECP256K1) {
+        throw std::runtime_error("The key is not a secp256k1 key");
+    }
+    */
+
+    // Generate the signature
+    unsigned char sig[1000];  // Make sure this is large enough
+    size_t sig_len;
+    ret = mbedtls_ecdsa_write_signature(ec, MBEDTLS_MD_SHA256, message.data(), message.size(), sig, &sig_len, mbedtls_ctr_drbg_random, &ctr_drbg);
+    if (ret != 0) {
+        throw std::runtime_error("Failed to generate the signature");
+    }
+
+    // Copy the signature to a vector
+    std::vector<unsigned char> signature(sig, sig + sig_len);
+
+    mbedtls_pk_free(&pk);
+
+    return signature;
+}
