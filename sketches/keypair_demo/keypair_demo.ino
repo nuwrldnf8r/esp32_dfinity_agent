@@ -4,18 +4,27 @@
 #include "esp_system.h"
 
 int cnt = 0;
+Keypair keypair = Keypair();
 
 void setup() {
   // Initialize serial communication
   Serial.begin(9600);  
+  keypair.initialize(true);
 }
 
 void loop() {
     cnt++;
-    if(cnt==3){
+    if(cnt==5){ 
         
       try {
-        Keypair keypair = Keypair();
+        std::vector<uint8_t> public_key = keypair.getPublicKey();
+        Serial.println("Public key:");
+        for(auto byte : public_key){
+            Serial.print(byte, HEX);
+        }
+        Serial.println();
+        Serial.println();
+        /*
         std::vector<unsigned char> message = {'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd'};
         std::vector<unsigned char> signature = keypair.sign(message);
           
@@ -33,15 +42,15 @@ void loop() {
         } else {
             printf("Signature verification failed\n");
         }
-
+        */
       } catch (const std::exception& e) {
           printf("Exception: %s\n", e.what());
       }
-
-        cnt = 0;
+      
+      cnt = 0;
     } else {
         Serial.print("fetching in ");
-        Serial.println(3-cnt);
+        Serial.println(5-cnt);
     }
     delay(1000);
 }

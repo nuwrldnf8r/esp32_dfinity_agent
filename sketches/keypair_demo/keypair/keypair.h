@@ -7,7 +7,10 @@
 class Keypair {
 public:
     Keypair();
-    Keypair(const std::vector<unsigned char>& private_key_buf);
+    //Keypair(const std::vector<unsigned char>& private_key_buf);
+    void initialize();
+    void initialize(bool from_storage);
+    void initialize(const std::vector<unsigned char>& private_key_buf);
     std::vector<unsigned char> sign(const std::vector<unsigned char>& message);
     bool verify(const std::vector<unsigned char>& message, const std::vector<uint8_t>& public_key, const std::vector<unsigned char>& signature);
     const std::vector<uint8_t>& getPrivateKey() const { return _private_key; }
