@@ -2,6 +2,7 @@
 #define KEYPAIR_H
 
 #include <vector>
+#include <string>
 
 
 class Keypair {
@@ -16,6 +17,7 @@ public:
     const std::vector<uint8_t>& getPrivateKey() const { return _private_key; }
     const std::vector<uint8_t>& getPublicKey() const { return _public_key; }
     bool isInitialized() const { return _is_initialized; }
+    std::string getPrincipal() const;
 
 private:
     std::vector<uint8_t> _private_key;

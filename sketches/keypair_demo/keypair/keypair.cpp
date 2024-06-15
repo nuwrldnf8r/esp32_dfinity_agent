@@ -6,10 +6,41 @@
 #include <vector>
 #include <cstring>
 #include <EEPROM.h>
+#include "mbedtls/sha256.h"
 
 #define EEPROM_SIZE 100
 #define MARKER_ADDRESS 0
 #define MARKER 0xABFF
+
+
+const char base32Alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+std::string base32_encode(const unsigned char* data, size_t length) {
+    std::string result;
+    int buffer = data[0];
+    int next = 1;
+    int bitsLeft = 8;
+
+    while (bitsLeft > 0 || next < length) {
+        if (bitsLeft < 5) {
+            if (next < length) {
+                buffer <<= 8;
+                buffer |= data[next++] & 0xFF;
+                bitsLeft += 8;
+            } else {
+                int pad = 5 - bitsLeft;
+                buffer <<= pad;
+                bitsLeft += pad;
+            }
+        }
+
+        int index = (buffer >> (bitsLeft - 5)) & 0x1F;
+        bitsLeft -= 5;
+        result += base32Alphabet[index];
+    }
+
+    return result;
+}
 
 int esp_random_function(uint8_t *dest, unsigned size) {
     esp_fill_random(dest, size);
@@ -172,4 +203,17 @@ bool Keypair::verify(const std::vector<unsigned char>& message, const std::vecto
 
     // Verify the signature
     return uECC_verify(public_key.data(), message.data(), message.size(), signature.data(), curve);
+}
+
+std::string Keypair::getPrincipal() const {
+    unsigned char hash[32];
+    mbedtls_sha256_context ctx;
+    mbedtls_sha256_init(&ctx);
+    mbedtls_sha256_starts(&ctx, 0);
+    mbedtls_sha256_update(&ctx, _public_key.data(), _public_key.size());
+    mbedtls_sha256_finish(&ctx, hash);
+    mbedtls_sha256_free(&ctx);
+
+    std::string principal = base32_encode(hash, 28);
+    return principal;
 }

@@ -2,6 +2,7 @@
 #include "keypair/keypair.cpp"
 #include <stdexcept>
 #include "esp_system.h"
+#include <string>
 
 int cnt = 0;
 Keypair keypair = Keypair();
@@ -23,6 +24,11 @@ void loop() {
             Serial.print(byte, HEX);
         }
         Serial.println();
+        Serial.println();
+
+        std::string principal = keypair.getPrincipal();
+        Serial.print("Principal: ");
+        Serial.println(principal.c_str());
         Serial.println();
         /*
         std::vector<unsigned char> message = {'h', 'e', 'l', 'l', 'o', ' ', 'w', 'o', 'r', 'l', 'd'};
