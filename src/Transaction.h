@@ -9,7 +9,7 @@ public:
     
     std::vector<uint8_t> encode();
     //void addDelegation(const std::string& pubkey, const std::string& delegation);
-    void sign(const std::string& private_key); 
+    //void sign(const std::string& private_key); 
 
 private:
     uint64_t _ingress_expiry, 
