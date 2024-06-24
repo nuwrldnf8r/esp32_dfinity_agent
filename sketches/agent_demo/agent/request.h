@@ -9,8 +9,9 @@
 class Request {
 public:
     // Constructors
+    Request();
     Request(const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::vector<uint8_t>& args);
-    Request(const std::string& sender, const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::vector<uint8_t>& args, const std::string& sender_pubkey);
+    Request(const std::string& sender, const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::vector<uint8_t>& args, const std::vector<uint8_t>& sender_pubkey);
     
     std::vector<uint8_t> encode() const;
     std::vector<uint8_t> createReadStateRequest(const std::string& canisterId, const std::vector<std::vector<std::string>>& paths) const; 
@@ -19,7 +20,7 @@ public:
 private:
     uint64_t _ingress_expiry;
     std::string _sender;
-    std::string _sender_pubkey;
+    std::vector<uint8_t> _sender_pubkey;
     std::string _canisterId;
     std::string _request_type;
     std::string _method_name;

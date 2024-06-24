@@ -209,12 +209,14 @@ std::vector<uint8_t> Request::hexStringToBytes(const std::string& hexString) con
     return byteArray;
 }
 
+Request::Request() {}
+
 Request::Request(const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::vector<uint8_t>& args)
     : _canisterId(canisterId), _request_type(request_type), _method_name(method_name), _args(args) {
     _ingress_expiry = calculateIngressExpiry(60); // Set expiry time to 1 hour from now
 }
 
-Request::Request(const std::string& sender, const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::vector<uint8_t>& args, const std::string& sender_pubkey)
+Request::Request(const std::string& sender, const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::vector<uint8_t>& args, const std::vector<uint8_t>& sender_pubkey)
     : _sender(sender), _canisterId(canisterId), _request_type(request_type), _method_name(method_name), _args(args), _sender_pubkey(sender_pubkey) {
     _ingress_expiry = calculateIngressExpiry(60); // Set expiry time to 1 hour from now
 }
@@ -258,26 +260,8 @@ std::vector<uint8_t> Request::encode() const {
         if ((err = cbor_encode_text_stringz(&nestedMapEncoder, _method_name.c_str())) != CborNoError) throw std::runtime_error("Failed to encode method_name value");
 
         if ((err = cbor_encode_text_stringz(&nestedMapEncoder, "arg")) != CborNoError) throw std::runtime_error("Failed to encode args key");
-
-        // Adding the DIDL prefix
-        std::vector<uint8_t> didl_prefix = {'D', 'I', 'D', 'L'};
-        std::vector<uint8_t> args_encoded;
-
-        if (_args.empty()) {
-            // If args are empty, use the empty DIDL prefix
-            args_encoded = didl_prefix;
-            args_encoded.push_back(0x00); // Argument type (empty)
-            args_encoded.push_back(0x00); // Empty argument value
-        } else {
-            // Otherwise, prepend the DIDL prefix to the actual CBOR-encoded arguments
-            args_encoded = didl_prefix;
-            args_encoded.insert(args_encoded.end(), _args.begin(), _args.end());
-        }
-
-        if ((err = cbor_encode_byte_string(&nestedMapEncoder, args_encoded.data(), args_encoded.size())) != CborNoError) {
-            throw std::runtime_error("Failed to encode args value");
-        }
-
+        if ((err = cbor_encode_byte_string(&nestedMapEncoder, _args.data(), _args.size())) != CborNoError) throw std::runtime_error("Failed to encode args value");
+        
         if ((err = cbor_encoder_close_container(&mapEncoder, &nestedMapEncoder)) != CborNoError) throw std::runtime_error("Failed to close nested container");
     }
     if ((err = cbor_encoder_close_container(&encoder, &mapEncoder)) != CborNoError) throw std::runtime_error("Failed to close container");
@@ -290,7 +274,6 @@ std::vector<uint8_t> Request::encode() const {
 }
 
 std::vector<uint8_t> Request::createReadStateRequest(const std::string& canisterId, const std::vector<std::vector<std::string>>& paths) const {
-    uint8_t encode_buffer[1024];
     CborEncoder encoder, mapEncoder, contentMapEncoder, pathsArrayEncoder, pathArrayEncoder;
     cbor_encoder_init(&encoder, encode_buffer, sizeof(encode_buffer), 0);
 
