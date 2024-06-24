@@ -5,11 +5,12 @@
 #include <vector>
 #include <cstdint>
 
-class Transaction {
+
+class Request {
 public:
     // Constructors
-    Transaction(const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::string& args);
-    Transaction(const std::string& sender, const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::string& args, const std::string& sender_pubkey);
+    Request(const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::vector<uint8_t>& args);
+    Request(const std::string& sender, const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::vector<uint8_t>& args, const std::string& sender_pubkey);
     
     std::vector<uint8_t> encode() const;
     std::vector<uint8_t> createReadStateRequest(const std::string& canisterId, const std::vector<std::vector<std::string>>& paths) const; 
@@ -22,7 +23,7 @@ private:
     std::string _canisterId;
     std::string _request_type;
     std::string _method_name;
-    std::string _args;
+    std::vector<uint8_t> _args;  // Changed to vector of bytes
     std::string _requestId;
 
     std::vector<uint8_t> stringToHexString(const std::string& input) const;

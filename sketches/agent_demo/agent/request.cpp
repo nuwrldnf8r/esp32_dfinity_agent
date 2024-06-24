@@ -1,4 +1,4 @@
-#include "transaction.h"
+#include "request.h"
 #include <tinycbor.h>
 #include <stdexcept>
 #include <algorithm>
@@ -8,6 +8,7 @@
 #include <mbedtls/sha256.h>
 #include <string>
 #include <map>
+#include <cppcodec/base32_rfc4648.hpp>
 
 uint8_t encode_buffer[1024];
 
@@ -117,39 +118,71 @@ std::vector<uint8_t> cbor_hash(const std::map<std::vector<uint8_t>, std::vector<
     return sha256(concatenated);
 }
 
-std::vector<uint8_t> unbase32(const std::string& input) {
-    std::vector<uint8_t> result;
-    uint32_t acc = 0;
-    int len = 0;
-    const std::string base32Chars = "abcdefghijklmnopqrstuvwxyz234567";
 
-    for (char c : input) {
-        auto pos = base32Chars.find(tolower(c));
-        if (pos == std::string::npos) {
-            throw std::runtime_error("Invalid character in base32 string");
-        }
-        acc = acc * 32 + pos;
-        len += 5;
-        if (len >= 8) {
-            result.push_back((acc >> (len - 8)) & 0xFF);
-            acc = acc % (1 << (len - 8));
-            len -= 8;
-        }
-    }
+using base32 = cppcodec::base32_rfc4648;
+
+// Function to remove dashes from the cooked canister ID
+std::string removeDashes(const std::string& input) {
+    std::string result;
+    std::copy_if(input.begin(), input.end(), std::back_inserter(result), [](char c) { return c != '-'; });
     return result;
 }
 
+// Function to ensure the input string has correct padding for base32 decoding
+std::string ensurePadding(const std::string& input) {
+    std::string paddedInput = input;
+    while (paddedInput.size() % 8 != 0) {
+        paddedInput.push_back('=');
+    }
+    return paddedInput;
+}
+
+// Function to decode a base32 encoded string, ignoring dashes and ensuring padding
+std::vector<uint8_t> unbase32(const std::string& input) {
+    std::string cleanedInput = removeDashes(input);
+    std::string paddedInput = ensurePadding(cleanedInput);
+    std::vector<uint8_t> decoded = base32::decode(paddedInput);
+    return decoded;
+}
+
+// Function to uncook a cooked canister ID
 std::vector<uint8_t> uncook(const std::string& input) {
     std::vector<uint8_t> decoded = unbase32(input);
+    printf("Decoded bytes: ");
+    for (auto byte : decoded) {
+        printf("%02x ", byte);
+    }
+    printf("\n");
+
+    // Discard the first 4 bytes (CRC)
     return std::vector<uint8_t>(decoded.begin() + 4, decoded.end());
 }
 
-uint64_t Transaction::calculateIngressExpiry(uint64_t durationInSeconds) const {
+// Function to encode raw bytes back to base32
+std::string base32Encode(const std::vector<uint8_t>& input) {
+    std::string encoded = base32::encode(input);
+    
+    // Insert dashes to match the format
+    std::string result;
+    for (size_t i = 0; i < encoded.size(); ++i) {
+        if (i > 0 && i % 5 == 0) {
+            result.push_back('-');
+        }
+        result.push_back(encoded[i]);
+    }
+
+    return result;
+}
+
+
+
+
+uint64_t Request::calculateIngressExpiry(uint64_t durationInSeconds) const {
     time_t now = time(nullptr);
     return (static_cast<uint64_t>(now) + durationInSeconds) * 1000000000ULL;
 }
 
-std::vector<uint8_t> Transaction::stringToHexString(const std::string& input) const {
+std::vector<uint8_t> Request::stringToHexString(const std::string& input) const {
     const char hexDigits[] = "0123456789ABCDEF";
     size_t inputLength = input.size();
     size_t outputLength = inputLength * 2;
@@ -164,7 +197,7 @@ std::vector<uint8_t> Transaction::stringToHexString(const std::string& input) co
     return hexString;
 }
 
-std::vector<uint8_t> Transaction::hexStringToBytes(const std::string& hexString) const {
+std::vector<uint8_t> Request::hexStringToBytes(const std::string& hexString) const {
     size_t hexStringLength = hexString.size();
     size_t byteStringLength = hexStringLength / 2;
     std::vector<uint8_t> byteArray(byteStringLength);
@@ -176,17 +209,17 @@ std::vector<uint8_t> Transaction::hexStringToBytes(const std::string& hexString)
     return byteArray;
 }
 
-Transaction::Transaction(const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::string& args)
+Request::Request(const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::vector<uint8_t>& args)
     : _canisterId(canisterId), _request_type(request_type), _method_name(method_name), _args(args) {
     _ingress_expiry = calculateIngressExpiry(60); // Set expiry time to 1 hour from now
 }
 
-Transaction::Transaction(const std::string& sender, const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::string& args, const std::string& sender_pubkey)
+Request::Request(const std::string& sender, const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::vector<uint8_t>& args, const std::string& sender_pubkey)
     : _sender(sender), _canisterId(canisterId), _request_type(request_type), _method_name(method_name), _args(args), _sender_pubkey(sender_pubkey) {
     _ingress_expiry = calculateIngressExpiry(60); // Set expiry time to 1 hour from now
 }
 
-std::vector<uint8_t> Transaction::encode() const {
+std::vector<uint8_t> Request::encode() const {
     int err = 0;
 
     // Initialize CBOR encoder
@@ -207,7 +240,7 @@ std::vector<uint8_t> Transaction::encode() const {
     // Start CBOR encoding
     if ((err = cbor_encoder_create_map(&encoder, &mapEncoder, 1)) != CborNoError) throw std::runtime_error("Failed to create map");
     if ((err = cbor_encode_text_stringz(&mapEncoder, "content")) != CborNoError) throw std::runtime_error("Failed to encode content key");
-    {   
+    {
         if ((err = cbor_encoder_create_map(&mapEncoder, &nestedMapEncoder, 6)) != CborNoError) throw std::runtime_error("Failed to create nested map");
         if ((err = cbor_encode_text_stringz(&nestedMapEncoder, "ingress_expiry")) != CborNoError) throw std::runtime_error("Failed to encode ingress_expiry key");
         if ((err = cbor_encode_uint(&nestedMapEncoder, _ingress_expiry)) != CborNoError) throw std::runtime_error("Failed to encode ingress_expiry value");
@@ -225,14 +258,27 @@ std::vector<uint8_t> Transaction::encode() const {
         if ((err = cbor_encode_text_stringz(&nestedMapEncoder, _method_name.c_str())) != CborNoError) throw std::runtime_error("Failed to encode method_name value");
 
         if ((err = cbor_encode_text_stringz(&nestedMapEncoder, "arg")) != CborNoError) throw std::runtime_error("Failed to encode args key");
-        auto params = stringToHexString(_args);
-        if ((err = cbor_encode_byte_string(&nestedMapEncoder, params.data(), params.size())) != CborNoError) throw std::runtime_error("Failed to encode args value");
+
+        // Adding the DIDL prefix
+        std::vector<uint8_t> didl_prefix = {'D', 'I', 'D', 'L'};
+        std::vector<uint8_t> args_encoded;
+
+        if (_args.empty()) {
+            // If args are empty, use the empty DIDL prefix
+            args_encoded = didl_prefix;
+            args_encoded.push_back(0x00); // Argument type (empty)
+            args_encoded.push_back(0x00); // Empty argument value
+        } else {
+            // Otherwise, prepend the DIDL prefix to the actual CBOR-encoded arguments
+            args_encoded = didl_prefix;
+            args_encoded.insert(args_encoded.end(), _args.begin(), _args.end());
+        }
+
+        if ((err = cbor_encode_byte_string(&nestedMapEncoder, args_encoded.data(), args_encoded.size())) != CborNoError) {
+            throw std::runtime_error("Failed to encode args value");
+        }
 
         if ((err = cbor_encoder_close_container(&mapEncoder, &nestedMapEncoder)) != CborNoError) throw std::runtime_error("Failed to close nested container");
-    }
-    if (!_requestId.empty()) {
-        if ((err = cbor_encode_text_stringz(&mapEncoder, "request_id")) != CborNoError) throw std::runtime_error("Failed to encode request_id key");
-        if ((err = cbor_encode_byte_string(&mapEncoder, reinterpret_cast<const uint8_t*>(_requestId.data()), _requestId.size())) != CborNoError) throw std::runtime_error("Failed to encode request_id value");
     }
     if ((err = cbor_encoder_close_container(&encoder, &mapEncoder)) != CborNoError) throw std::runtime_error("Failed to close container");
 
@@ -243,7 +289,7 @@ std::vector<uint8_t> Transaction::encode() const {
     return result;
 }
 
-std::vector<uint8_t> Transaction::createReadStateRequest(const std::string& canisterId, const std::vector<std::vector<std::string>>& paths) const {
+std::vector<uint8_t> Request::createReadStateRequest(const std::string& canisterId, const std::vector<std::vector<std::string>>& paths) const {
     uint8_t encode_buffer[1024];
     CborEncoder encoder, mapEncoder, contentMapEncoder, pathsArrayEncoder, pathArrayEncoder;
     cbor_encoder_init(&encoder, encode_buffer, sizeof(encode_buffer), 0);
@@ -308,7 +354,7 @@ std::vector<uint8_t> Transaction::createReadStateRequest(const std::string& cani
     return result;
 }
 
-std::vector<uint8_t> Transaction::generateSHA256(const std::vector<uint8_t>& data) const {
+std::vector<uint8_t> Request::generateSHA256(const std::vector<uint8_t>& data) const {
     std::vector<uint8_t> hash(32); // SHA-256 outputs 32 bytes
 
     mbedtls_sha256_context ctx;
@@ -321,7 +367,7 @@ std::vector<uint8_t> Transaction::generateSHA256(const std::vector<uint8_t>& dat
     return hash;
 }
 
-std::string Transaction::generateRequestId() const {
+std::string Request::generateRequestId() const {
     std::map<std::vector<uint8_t>, std::vector<uint8_t>> content_map;
 
     // Fill content_map with the hashed key-value pairs of the content
@@ -330,7 +376,7 @@ std::string Transaction::generateRequestId() const {
     content_map[cbor_hash("canister_id")] = cbor_hash(_canisterId);
     content_map[cbor_hash("request_type")] = cbor_hash(_request_type);
     content_map[cbor_hash("method_name")] = cbor_hash(_method_name);
-    content_map[cbor_hash("arg")] = cbor_hash(stringToHexString(_args));
+    content_map[cbor_hash("arg")] = cbor_hash(_args);
 
     // Compute the hash of the entire content map
     auto request_id_hash = cbor_hash(content_map);
