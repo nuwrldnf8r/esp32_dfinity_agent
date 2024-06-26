@@ -36,8 +36,9 @@ public:
     bool decodeBool();
     std::vector<uint8_t> decodeBlob();
     std::vector<Parameter> decode();
+    std::vector<uint8_t> encode() const { return data_; }
     std::vector<uint8_t> encode(const std::vector<Parameter>& args);
-    std::vector<uint8_t> rawData() const { return data_; }
+    std::vector<uint8_t> encodeEmpty();
 
 private:
     std::vector<uint8_t> data_;

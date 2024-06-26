@@ -1,5 +1,4 @@
-#include "agent/http_agent.h"
-#include "agent/http_agent.cpp"
+#include "http_agent.h"
 #include <stdexcept>
 #include "esp_system.h"
 #include <string>
@@ -60,7 +59,7 @@ void loop() {
             if (WiFi.status() == WL_CONNECTED) {
                 Serial.println("WiFi connected");
                 HttpAgent agent(canisterId);
-                std::vector<uint8_t> args = {};
+                std::vector<Parameter> args = {};
                 agent.query("get_data", args);
             }
         } catch (const std::exception& e) {

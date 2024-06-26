@@ -7,6 +7,7 @@
 #include <cstring>
 #include <EEPROM.h>
 #include "mbedtls/sha256.h"
+#include "keypair.h"
 
 #define EEPROM_SIZE 100
 #define MARKER_ADDRESS 0

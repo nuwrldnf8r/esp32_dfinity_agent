@@ -182,6 +182,9 @@ std::vector<Parameter> Candid::decode() {
 }
 
 std::vector<uint8_t> Candid::encode(const std::vector<Parameter>& args) {
+    if(args.empty()) {
+        return encodeEmpty();
+    }
     std::vector<uint8_t> result = didl_prefix;
     for (const Parameter& arg : args) {
         printf("Encoding type: %s\n", arg.getType().c_str());
@@ -190,3 +193,10 @@ std::vector<uint8_t> Candid::encode(const std::vector<Parameter>& args) {
     }
     return result;
 }
+
+
+std::vector<uint8_t> Candid::encodeEmpty() {
+    std::vector<uint8_t> result = didl_prefix;
+    result.insert(result.end(), didl_empty.begin(), didl_empty.end());
+    return result;
+}   
