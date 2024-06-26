@@ -139,47 +139,66 @@ int64_t Candid::leb128Decode() {
 }
 
 std::vector<Parameter> Candid::decode() {
-    std::vector<Parameter> parameters;
-    if (data_.size() < 4 || std::string(data_.begin(), data_.begin() + 4) != "DIDL") {
-        throw std::runtime_error("Invalid Candid encoding");
-    }
-    position_ += 4; // Skip DIDL prefix
+    std::vector<Parameter> result;
 
-    while (position_ < data_.size()) {
-        uint8_t type = readByte();
-        switch (type) {
-            case 0x7d: // bool
-                parameters.push_back(Parameter(readByte() == 0x01));
-                break;
-            case 0x7c: // int
-                parameters.push_back(Parameter(leb128Decode()));
-                break;
-            case 0x71: // text
-                {
-                    int64_t length = leb128Decode();
-                    std::string value;
-                    for (int64_t i = 0; i < length; ++i) {
-                        value += char(readByte());
-                    }
-                    parameters.push_back(Parameter(value));
-                }
-                break;
-            case 0x68: // blob
-                {
-                    int64_t length = leb128Decode();
-                    std::vector<uint8_t> value(length);
-                    for (int64_t i = 0; i < length; ++i) {
-                        value[i] = readByte();
-                    }
-                    parameters.push_back(Parameter(value));
-                }
-                break;
-            default:
-                throw std::runtime_error("Unknown type indicator");
+    // Ensure the prefix matches
+    for (size_t i = 0; i < didl_prefix.size(); ++i) {
+        if (readByte() != didl_prefix[i]) {
+            throw std::runtime_error("Invalid Candid prefix");
         }
     }
-    return parameters;
+
+    uint8_t num_types = readByte();  // This should be the number of type descriptions
+    if (num_types != 0x00) {
+        throw std::runtime_error("Invalid number of type descriptions");
+    }
+
+    uint8_t num_values = readByte();  // This should be the number of values
+    for (uint8_t i = 0; i < num_values; ++i) {
+        uint8_t type = readByte();
+
+        switch (type) {
+            case 0x71:  // Text type
+            {
+                uint64_t length = leb128Decode();
+                std::string value;
+                for (uint64_t j = 0; j < length; ++j) {
+                    value += char(readByte());
+                }
+                result.push_back(Parameter(value));
+                break;
+            }
+            case 0x7c:  // Int type
+            {
+                int64_t value = leb128Decode();
+                result.push_back(Parameter(value));
+                break;
+            }
+            case 0x7d:  // Bool type
+            {
+                bool value = readByte() != 0x00;
+                result.push_back(Parameter(value));
+                break;
+            }
+            case 0x7f:  // Blob type
+            {
+                uint64_t length = leb128Decode();
+                std::vector<uint8_t> value(length);
+                for (uint64_t j = 0; j < length; ++j) {
+                    value[j] = readByte();
+                }
+                result.push_back(Parameter(value));
+                break;
+            }
+            default:
+                throw std::runtime_error("Unknown Candid type");
+        }
+    }
+
+    return result;
 }
+
+
 
 std::vector<uint8_t> Candid::encode(const std::vector<Parameter>& args) {
     if(args.empty()) {

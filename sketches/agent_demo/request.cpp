@@ -148,12 +148,6 @@ std::vector<uint8_t> unbase32(const std::string& input) {
 // Function to uncook a cooked canister ID
 std::vector<uint8_t> uncook(const std::string& input) {
     std::vector<uint8_t> decoded = unbase32(input);
-    printf("Decoded bytes: ");
-    for (auto byte : decoded) {
-        printf("%02x ", byte);
-    }
-    printf("\n");
-
     // Discard the first 4 bytes (CRC)
     return std::vector<uint8_t>(decoded.begin() + 4, decoded.end());
 }

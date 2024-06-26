@@ -8,6 +8,7 @@
 #include <time.h>
 #include <tinycbor/cbor.h>
 
+
 // Replace with your network credentials
 const char* ssid = "Main House";
 const char* password = "mainwifi";
@@ -60,7 +61,12 @@ void loop() {
                 Serial.println("WiFi connected");
                 HttpAgent agent(canisterId);
                 std::vector<Parameter> args = {};
-                agent.query("get_data", args);
+                std::vector<Parameter> result = agent.query("get_data", args);
+                printf("**********************************");
+                printf("Result: ");
+                printf(result[0].parseText().c_str());
+                printf("\n");
+                printf("**********************************");
             }
         } catch (const std::exception& e) {
             Serial.println("An exception occurred");
