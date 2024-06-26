@@ -60,8 +60,9 @@ void loop() {
             if (WiFi.status() == WL_CONNECTED) {
                 Serial.println("WiFi connected");
                 HttpAgent agent(canisterId);
-                std::vector<Parameter> args = {};
-                std::vector<Parameter> result = agent.query("get_data", args);
+                Parameter p = Parameter((std::string)"hello world");
+                std::vector<Parameter> args = {p};
+                std::vector<Parameter> result = agent.query("test_data", args);
                 printf("**********************************");
                 printf("Result: ");
                 printf(result[0].parseText().c_str());

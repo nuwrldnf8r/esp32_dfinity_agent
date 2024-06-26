@@ -55,11 +55,7 @@ std::vector<Parameter> HttpAgent::query(const std::string& method_name, const st
         request = Request(_senderKeyPair.getPrincipal(), _canisterID, "query", method_name, _args, _senderKeyPair.getPublicKey());
     }
     std::vector<uint8_t> encoded = request.encode();
-    
-    for (auto byte : encoded) {
-        printf("%02x", byte);
-    }
-    printf("\n");
+
 
     String encodedCanisterId = urlEncode(_canisterID.c_str());
     String url = baseURL + encodedCanisterId + "/query";
@@ -79,11 +75,8 @@ std::vector<Parameter> HttpAgent::query(const std::string& method_name, const st
     if (httpResponseCode > 0) {
         printf("Response code: \n%d", httpResponseCode);
         printf("\n");
-        printf("Response: \n");
-
+        
         String response = http.getString();
-        printf(response.c_str());
-        printf("\n");
 
         // Assuming you get a CBOR response and want to print it as hex
         std::vector<uint8_t> responseBytes(response.begin(), response.end());

@@ -1,4 +1,5 @@
 #include "candid.h"
+#include <algorithm>
 
 const std::vector<uint8_t> didl_prefix = {'D', 'I', 'D', 'L'};
 const std::vector<uint8_t> didl_empty = {0, 0};
@@ -205,6 +206,18 @@ std::vector<uint8_t> Candid::encode(const std::vector<Parameter>& args) {
         return encodeEmpty();
     }
     std::vector<uint8_t> result = didl_prefix;
+    //count number of types
+    std::vector<std::string> types;
+    for (const Parameter& arg : args) {
+        auto idx = std::find(types.begin(), types.end(), arg.getType());
+        if (idx == types.end()) {
+            types.push_back(arg.getType());
+        }
+    }
+    result.push_back(types.size()-1);
+    result.push_back(args.size());
+
+
     for (const Parameter& arg : args) {
         printf("Encoding type: %s\n", arg.getType().c_str());
         std::vector<uint8_t> value_ = arg.getValue(); // Copy the value to avoid const issues
