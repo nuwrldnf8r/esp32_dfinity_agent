@@ -1,12 +1,15 @@
 #include "utils.h"
+#include "keypair.h"
 #include <stdexcept>
 #include <string>
 #include <vector>
 #include <algorithm>
 #include <mbedtls/sha256.h>
+#include <mbedtls/pk.h>
 #include <cstdint>
 #include <map>
 #include <cppcodec/base32_rfc4648.hpp>
+
 
 using base32 = cppcodec::base32_rfc4648;
 
@@ -128,4 +131,60 @@ std::vector<uint8_t> Utils::cbor_hash(const std::map<std::vector<uint8_t>, std::
         concatenated.insert(concatenated.end(), pair.begin(), pair.end());
     }
     return sha256(concatenated);
+}
+
+std::vector<uint8_t> Utils::der_encode_signature(const std::vector<unsigned char>& signature) {
+    // Split the signature into r and s
+    size_t size = signature.size() / 2;
+    std::vector<uint8_t> r(signature.begin(), signature.begin() + size);
+    std::vector<uint8_t> s(signature.begin() + size, signature.end());
+
+    std::vector<uint8_t> der;
+
+    // DER encode the integers r and s
+    der.push_back(0x02); // INTEGER
+    der.push_back(r.size());
+    der.insert(der.end(), r.begin(), r.end());
+
+    der.push_back(0x02); // INTEGER
+    der.push_back(s.size());
+    der.insert(der.end(), s.begin(), s.end());
+
+    // Wrap the encoded integers in a SEQUENCE
+    std::vector<uint8_t> result;
+    result.push_back(0x30); // SEQUENCE
+    result.push_back(der.size());
+    result.insert(result.end(), der.begin(), der.end());
+
+    return result;
+}
+
+std::vector<uint8_t> Utils::der_encode_pubkey(const Keypair& keypair) {
+    mbedtls_pk_context pk;
+    mbedtls_pk_init(&pk);
+    mbedtls_ecp_point ecp;
+    mbedtls_ecp_point_init(&ecp);
+
+    mbedtls_ecp_group grp;
+    mbedtls_ecp_group_init(&grp);
+
+    int ret = mbedtls_ecp_point_read_binary(&grp, &ecp,
+                                            keypair.getPublicKey().data(),
+                                            keypair.getPublicKey().size());
+                                            
+    if (ret != 0) {
+        // Handle error
+        return std::vector<uint8_t>();
+    }
+
+    unsigned char buf[MBEDTLS_MPI_MAX_SIZE];
+    ret = mbedtls_pk_write_pubkey_der(&pk, buf, sizeof(buf));
+    if (ret < 0) {
+        // Handle error
+        return std::vector<uint8_t>();
+    }
+
+    // The mbedtls_pk_write_pubkey_der function writes the data at the end of the buffer,
+    // so we need to adjust the pointer and size
+    return std::vector<uint8_t>(buf + sizeof(buf) - ret, buf + sizeof(buf));
 }

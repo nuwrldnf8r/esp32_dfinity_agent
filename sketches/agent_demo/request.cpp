@@ -7,6 +7,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include "keypair.h"
 
 uint8_t encode_buffer[1024];
 
@@ -50,12 +51,20 @@ Request::Request(const std::string& canisterId, const std::string& request_type,
     _ingress_expiry = calculateIngressExpiry(60); // Set expiry time to 1 hour from now
 }
 
-Request::Request(const std::string& sender, const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::vector<uint8_t>& args, const std::vector<uint8_t>& sender_pubkey)
-    : _sender(sender), _canisterId(canisterId), _request_type(request_type), _method_name(method_name), _args(args), _sender_pubkey(sender_pubkey) {
+Request::Request(const std::string& sender, const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::vector<uint8_t>& args)
+    : _sender(sender), _canisterId(canisterId), _request_type(request_type), _method_name(method_name), _args(args) {
     _ingress_expiry = calculateIngressExpiry(60); // Set expiry time to 1 hour from now
 }
 
-std::vector<uint8_t> Request::encode() const {
+std::vector<uint8_t> Request::encode(const Keypair& keypair) {
+    // Sign the request
+    sign(keypair);
+
+    // Encode the request
+    return encode();
+}
+
+std::vector<uint8_t> Request::encode() {
     int err = 0;
 
     // Initialize CBOR encoder
@@ -98,6 +107,23 @@ std::vector<uint8_t> Request::encode() const {
         
         if ((err = cbor_encoder_close_container(&mapEncoder, &nestedMapEncoder)) != CborNoError) throw std::runtime_error("Failed to close nested container");
     }
+    //TODO: delegation
+
+    /*
+    if(!_sender_pubkey.empty()){
+        printf("nor empty\n");
+        //check for signature
+        if(_sender_sig.empty()){
+            throw std::runtime_error("Signature is required when sender_pubkey is provided");
+        }
+        if((err = cbor_encode_text_stringz(&mapEncoder, "sender_pubkey")) != CborNoError) throw std::runtime_error("Failed to encode sender_pubkey key");
+        if((err = cbor_encode_byte_string(&mapEncoder, _sender_pubkey.data(), _sender_pubkey.size())) != CborNoError) throw std::runtime_error("Failed to encode sender_pubkey value");
+        if((err = cbor_encode_text_stringz(&mapEncoder, "sender_sig")) != CborNoError) throw std::runtime_error("Failed to encode signature key");
+        if((err = cbor_encode_byte_string(&mapEncoder, _sender_sig.data(), _sender_sig.size())) != CborNoError) throw std::runtime_error("Failed to encode sender_sig value");
+
+    }
+    */
+
     if ((err = cbor_encoder_close_container(&encoder, &mapEncoder)) != CborNoError) throw std::runtime_error("Failed to close container");
 
     // Retrieve encoded data
@@ -107,6 +133,7 @@ std::vector<uint8_t> Request::encode() const {
     return result;
 }
 
+/*
 std::vector<uint8_t> Request::createReadStateRequest(const std::string& canisterId, const std::vector<std::vector<std::string>>& paths) const {
     CborEncoder encoder, mapEncoder, contentMapEncoder, pathsArrayEncoder, pathArrayEncoder;
     cbor_encoder_init(&encoder, encode_buffer, sizeof(encode_buffer), 0);
@@ -170,8 +197,9 @@ std::vector<uint8_t> Request::createReadStateRequest(const std::string& canister
 
     return result;
 }
+*/
 
-std::string Request::generateRequestId() const {
+std::vector<u_int8_t> Request::generateRequestId() const {
     std::map<std::vector<uint8_t>, std::vector<uint8_t>> content_map;
 
     // Fill content_map with the hashed key-value pairs of the content
@@ -183,10 +211,21 @@ std::string Request::generateRequestId() const {
     content_map[Utils::cbor_hash("arg")] = Utils::cbor_hash(_args);
 
     // Compute the hash of the entire content map
-    auto request_id_hash = Utils::cbor_hash(content_map);
+    return Utils::cbor_hash(content_map);
+}
 
-    // Convert the hash to a hex string
-    std::string request_id(request_id_hash.begin(), request_id_hash.end());
-    return request_id;
+void Request::sign(Keypair keypair) {
+    //check that _sender is not empty
+    if (_sender.empty()) {
+        throw std::runtime_error("Sender cannot be empty when signing a request");
+    }
+    _sender_pubkey = Utils::der_encode_pubkey(keypair);
+
+    // Generate the request ID
+    auto reqId = generateRequestId();
+
+    // Generate the signature
+    std::vector<unsigned char> signature = keypair.sign(reqId);
+    _sender_sig = Utils::der_encode_signature(signature);
 }
 

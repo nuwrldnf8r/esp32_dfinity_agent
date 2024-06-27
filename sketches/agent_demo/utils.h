@@ -5,6 +5,7 @@
 #include <vector>
 #include <cstdint>
 #include <map>
+#include "keypair.h"
 
 class Utils{
     public:
@@ -22,5 +23,7 @@ class Utils{
         static std::vector<uint8_t> cbor_hash(uint64_t value);
         static std::vector<uint8_t> cbor_hash(const std::vector<std::vector<uint8_t>>& array);
         static std::vector<uint8_t> cbor_hash(const std::map<std::vector<uint8_t>, std::vector<uint8_t>>& map);
+        static std::vector<uint8_t> der_encode_signature(const std::vector<unsigned char>& signature);
+        static std::vector<uint8_t> der_encode_pubkey(const Keypair& keypair);
 };
 #endif // UTILS_H

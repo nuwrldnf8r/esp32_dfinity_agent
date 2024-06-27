@@ -32,7 +32,8 @@ Parameter::Parameter(const std::string& value) {
     _value.clear();
     _type = "text";
     _value.push_back(0x71);
-    Utils::leb128_encode(value.size());
+    std::vector<uint8_t> encoded_size = Utils::leb128_encode(value.size());
+    _value.insert(_value.end(), encoded_size.begin(), encoded_size.end());
     _value.insert(_value.end(), value.begin(), value.end());
 }
 
@@ -40,7 +41,8 @@ Parameter::Parameter(const std::vector<uint8_t>& value) {
     _value.clear();
     _type = "blob";
     _value.push_back(0x68);
-    Utils::leb128_encode(value.size());
+    std::vector<uint8_t> encoded_size = Utils::leb128_encode(value.size());
+    _value.insert(_value.end(), encoded_size.begin(), encoded_size.end());
     _value.insert(_value.end(), value.begin(), value.end());
 }
 
