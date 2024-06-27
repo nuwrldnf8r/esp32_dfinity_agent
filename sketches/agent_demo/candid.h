@@ -23,7 +23,6 @@ public:
 private:
     std::vector<uint8_t> _value;
     std::string _type;
-    void encodeLeb128(int64_t value);
 };
 
 class Candid {

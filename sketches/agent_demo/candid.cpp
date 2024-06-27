@@ -1,22 +1,10 @@
 #include "candid.h"
 #include <algorithm>
+#include "utils.h"
 
 const std::vector<uint8_t> didl_prefix = {'D', 'I', 'D', 'L'};
 const std::vector<uint8_t> didl_empty = {0, 0};
 
-void Parameter::encodeLeb128(int64_t value) {
-    bool more = true;
-    while (more) {
-        uint8_t byte = value & 0x7F;
-        value >>= 7;
-        if ((value == 0 && !(byte & 0x40)) || (value == -1 && (byte & 0x40))) {
-            more = false;
-        } else {
-            byte |= 0x80;
-        }
-        _value.push_back(byte);
-    }
-}
 
 Parameter::Parameter() {
     _value.clear();
@@ -36,7 +24,7 @@ Parameter::Parameter(const int64_t value) {
     _value.clear();
     _type = "int";
     _value.push_back(0x7c);
-    encodeLeb128(value);
+    Utils::leb128_encode(value);
 }
 
 Parameter::Parameter(const std::string& value) {
@@ -44,7 +32,7 @@ Parameter::Parameter(const std::string& value) {
     _value.clear();
     _type = "text";
     _value.push_back(0x71);
-    encodeLeb128(value.size());
+    Utils::leb128_encode(value.size());
     _value.insert(_value.end(), value.begin(), value.end());
 }
 
@@ -52,7 +40,7 @@ Parameter::Parameter(const std::vector<uint8_t>& value) {
     _value.clear();
     _type = "blob";
     _value.push_back(0x68);
-    encodeLeb128(value.size());
+    Utils::leb128_encode(value.size());
     _value.insert(_value.end(), value.begin(), value.end());
 }
 
