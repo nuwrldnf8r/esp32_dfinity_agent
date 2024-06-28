@@ -15,7 +15,7 @@ class HttpAgent {
         HttpAgent(const std::string& canisterID);
         HttpAgent(const std::string& canisterID, const Keypair& senderKeyPair);
         std::vector<Parameter> query(const std::string& method_name, const std::vector<Parameter>& args);
-        std::string principal() const { return _senderKeyPair.getPrincipal(); } 
+        //std::string principal() const { return _senderKeyPair.getPrincipal(); } 
         std::vector<uint8_t> public_key() const { return _senderKeyPair.getPublicKey(); }
         
     private:

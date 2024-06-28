@@ -12,7 +12,7 @@ public:
     // Constructors
     Request();
     Request(const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::vector<uint8_t>& args);
-    Request(const std::string& sender, const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::vector<uint8_t>& args);
+    Request(const std::vector<uint8_t>& sender, const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::vector<uint8_t>& args);
     
     std::vector<uint8_t> encode();
     std::vector<uint8_t> encode(const Keypair& keypair);
@@ -22,7 +22,7 @@ public:
 
 private:
     uint64_t _ingress_expiry;
-    std::string _sender;
+    std::vector<uint8_t> _sender;
     std::vector<uint8_t> _sender_pubkey;
     std::string _canisterId;
     std::string _request_type;

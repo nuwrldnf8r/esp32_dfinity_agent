@@ -51,7 +51,7 @@ Request::Request(const std::string& canisterId, const std::string& request_type,
     _ingress_expiry = calculateIngressExpiry(60); // Set expiry time to 1 hour from now
 }
 
-Request::Request(const std::string& sender, const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::vector<uint8_t>& args)
+Request::Request(const std::vector<uint8_t>& sender, const std::string& canisterId, const std::string& request_type, const std::string& method_name, const std::vector<uint8_t>& args)
     : _sender(sender), _canisterId(canisterId), _request_type(request_type), _method_name(method_name), _args(args) {
     _ingress_expiry = calculateIngressExpiry(60); // Set expiry time to 1 hour from now
 }
@@ -79,11 +79,14 @@ std::vector<uint8_t> Request::encode() {
     if (_sender.empty()) {
         sender_bytes.push_back(0x04); // Use hex value 04
     } else {
-        sender_bytes = Utils::uncook(_sender);
+        sender_bytes = std::vector<uint8_t>(_sender.begin(), _sender.end());
     }
 
+    int num_fields = (_sender_pubkey.empty())?1:3;
+
+
     // Start CBOR encoding
-    if ((err = cbor_encoder_create_map(&encoder, &mapEncoder, 1)) != CborNoError) throw std::runtime_error("Failed to create map");
+    if ((err = cbor_encoder_create_map(&encoder, &mapEncoder, num_fields)) != CborNoError) throw std::runtime_error("Failed to create map");
     if ((err = cbor_encode_text_stringz(&mapEncoder, "content")) != CborNoError) throw std::runtime_error("Failed to encode content key");
     {
         if ((err = cbor_encoder_create_map(&mapEncoder, &nestedMapEncoder, 6)) != CborNoError) throw std::runtime_error("Failed to create nested map");
@@ -109,9 +112,14 @@ std::vector<uint8_t> Request::encode() {
     }
     //TODO: delegation
 
-    /*
+    printf("sender_pubkey: \n");
+    for(auto byte : _sender_pubkey){
+        printf("%02x", byte);
+    }
+    printf("\n");
+    
     if(!_sender_pubkey.empty()){
-        printf("nor empty\n");
+        printf("not empty\n");
         //check for signature
         if(_sender_sig.empty()){
             throw std::runtime_error("Signature is required when sender_pubkey is provided");
@@ -122,7 +130,7 @@ std::vector<uint8_t> Request::encode() {
         if((err = cbor_encode_byte_string(&mapEncoder, _sender_sig.data(), _sender_sig.size())) != CborNoError) throw std::runtime_error("Failed to encode sender_sig value");
 
     }
-    */
+    
 
     if ((err = cbor_encoder_close_container(&encoder, &mapEncoder)) != CborNoError) throw std::runtime_error("Failed to close container");
 
@@ -204,7 +212,7 @@ std::vector<u_int8_t> Request::generateRequestId() const {
 
     // Fill content_map with the hashed key-value pairs of the content
     content_map[Utils::cbor_hash("ingress_expiry")] = Utils::cbor_hash(_ingress_expiry);
-    content_map[Utils::cbor_hash("sender")] = Utils::cbor_hash(_sender.empty() ? std::vector<uint8_t>{0x04} : Utils::uncook(_sender));
+    content_map[Utils::cbor_hash("sender")] = Utils::cbor_hash(_sender.empty() ? std::vector<uint8_t>{0x04} : _sender);
     content_map[Utils::cbor_hash("canister_id")] = Utils::cbor_hash(_canisterId);
     content_map[Utils::cbor_hash("request_type")] = Utils::cbor_hash(_request_type);
     content_map[Utils::cbor_hash("method_name")] = Utils::cbor_hash(_method_name);
@@ -215,17 +223,29 @@ std::vector<u_int8_t> Request::generateRequestId() const {
 }
 
 void Request::sign(Keypair keypair) {
+    printf("setting up for signing\n");
     //check that _sender is not empty
     if (_sender.empty()) {
-        throw std::runtime_error("Sender cannot be empty when signing a request");
+        _sender = keypair.getPrincipal();
     }
-    _sender_pubkey = Utils::der_encode_pubkey(keypair);
+    printf("setting pub key");
+
+    _sender_pubkey = keypair.getPublicKey();
+    if(!_sender_pubkey.empty()){
+        printf("pub key set\n");
+    }
 
     // Generate the request ID
-    auto reqId = generateRequestId();
+    printf("generating request id\n");
+    std::vector<unsigned char> requestIdVec = generateRequestId();
+    std::string requestId(requestIdVec.begin(), requestIdVec.end());
+    std::string message = requestId + "\x0Aic-request";
+    std::vector<uint8_t> message_vector(message.begin(), message.end());
+    std::vector<uint8_t> hash = Utils::sha256(message_vector);
 
     // Generate the signature
-    std::vector<unsigned char> signature = keypair.sign(reqId);
-    _sender_sig = Utils::der_encode_signature(signature);
+    printf("signing\n");
+    std::vector<unsigned char> signature = keypair.sign(hash);
+    _sender_sig = signature; //Utils::der_encode_signature(signature);
+    printf("signed\n");
 }
-

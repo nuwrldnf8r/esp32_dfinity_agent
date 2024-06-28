@@ -1,13 +1,21 @@
 #include "uECC.h"
+#include "esp_system.h"
+#include "keypair.h"
+#include "esp_system.h"
+#include "utils.h"
 #include <stdexcept>
 #include <stdint.h>
 #include <stddef.h>
-#include "esp_system.h"
 #include <vector>
 #include <cstring>
 #include <EEPROM.h>
 #include "mbedtls/sha256.h"
-#include "keypair.h"
+#include <mbedtls/pk.h>
+#include <mbedtls/pem.h>
+#include <mbedtls/error.h>
+#include <mbedtls/ecp.h>
+#include <iostream>
+
 
 #define EEPROM_SIZE 100
 #define MARKER_ADDRESS 0
@@ -108,8 +116,16 @@ void Keypair::initialize(){
     _private_key.assign(private_key, private_key + private_key_size);
     memset(private_key, 0, private_key_size);  // Zero out the private key buffer
 
-    // Assign public key to buffer
-    _public_key.assign(public_key, public_key + public_key_size);
+    // Convert the public key to DER format
+    // Add a 0x04 byte to the start of the public key
+    std::vector<uint8_t> public_key_with_prefix;
+    public_key_with_prefix.push_back(0x04);
+    public_key_with_prefix.insert(public_key_with_prefix.end(), public_key, public_key + public_key_size);
+
+    // Convert the public key to DER format
+    std::vector<uint8_t> der_encoded_public_key = der_encode_public_key(public_key_with_prefix);
+    _public_key_der.assign(der_encoded_public_key.begin(), der_encoded_public_key.end());
+   
 }
 
 void Keypair::initialize(bool from_storage){
@@ -138,6 +154,9 @@ void Keypair::initialize(bool from_storage){
     EEPROM.end();
 }
 
+#include <vector>
+#include <stdexcept>
+
 void Keypair::initialize(const std::vector<unsigned char>& private_key_buf){
     _is_initialized = true;
     uECC_set_rng(esp_random_function);
@@ -164,8 +183,15 @@ void Keypair::initialize(const std::vector<unsigned char>& private_key_buf){
     _private_key.assign(private_key, private_key + private_key_size);
     memset(private_key, 0, private_key_size);  // Zero out the private key buffer
 
-    // Assign public key to buffer
-    _public_key.assign(public_key, public_key + public_key_size);
+    // Convert the public key to DER format
+    // Add a 0x04 byte to the start of the public key
+    std::vector<uint8_t> public_key_with_prefix;
+    public_key_with_prefix.push_back(0x04);
+    public_key_with_prefix.insert(public_key_with_prefix.end(), public_key, public_key + public_key_size);
+
+    // Convert the public key to DER format
+    std::vector<uint8_t> der_encoded_public_key = der_encode_public_key(public_key_with_prefix);
+    _public_key_der.assign(der_encoded_public_key.begin(), der_encoded_public_key.end());
 }
 
 
@@ -205,15 +231,78 @@ bool Keypair::verify(const std::vector<unsigned char>& message, const std::vecto
     return uECC_verify(public_key.data(), message.data(), message.size(), signature.data(), curve);
 }
 
-std::string Keypair::getPrincipal() const {
-    unsigned char hash[32];
-    mbedtls_sha256_context ctx;
-    mbedtls_sha256_init(&ctx);
-    mbedtls_sha256_starts(&ctx, 0);
-    mbedtls_sha256_update(&ctx, _public_key.data(), _public_key.size());
-    mbedtls_sha256_finish(&ctx, hash);
-    mbedtls_sha256_free(&ctx);
+std::vector<uint8_t> Keypair::getPrincipal() const {
+   // Compute SHA-224 hash
+    unsigned char hash[28];
+    mbedtls_sha256(_public_key_der.data(), _public_key_der.size(), hash, 1);
 
-    std::string principal = base32_encode(hash, 28);
-    return principal;
+    std::vector<uint8_t> hash_vector(hash, hash + sizeof(hash));
+    hash_vector.push_back(0x02);
+    return hash_vector;
+}
+
+
+// Helper function to encode length in DER format
+std::vector<uint8_t> encode_length(size_t length) {
+    std::vector<uint8_t> encoded_length;
+    if (length < 128) {
+        encoded_length.push_back(static_cast<uint8_t>(length));
+    } else {
+        std::vector<uint8_t> len_bytes;
+        while (length > 0) {
+            len_bytes.push_back(static_cast<uint8_t>(length & 0xFF));
+            length >>= 8;
+        }
+        encoded_length.push_back(static_cast<uint8_t>(0x80 | len_bytes.size()));
+        for (auto it = len_bytes.rbegin(); it != len_bytes.rend(); ++it) {
+            encoded_length.push_back(*it);
+        }
+    }
+    return encoded_length;
+}
+
+// Helper function to encode OID
+std::vector<uint8_t> encode_oid(const std::vector<uint8_t>& oid) {
+    std::vector<uint8_t> encoded_oid = {0x06}; // OID tag
+    auto encoded_length = encode_length(oid.size());
+    encoded_oid.insert(encoded_oid.end(), encoded_length.begin(), encoded_length.end());
+    encoded_oid.insert(encoded_oid.end(), oid.begin(), oid.end());
+    return encoded_oid;
+}
+
+// Function to DER encode EC public key for secp256k1
+std::vector<uint8_t> Keypair::der_encode_public_key(const std::vector<uint8_t>& public_key) {
+    // OID for id-ecPublicKey and secp256k1
+    std::vector<uint8_t> oid_ecPublicKey = {0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01};
+    std::vector<uint8_t> oid_secp256k1 = {0x2B, 0x81, 0x04, 0x00, 0x0A};
+
+    // AlgorithmIdentifier sequence
+    std::vector<uint8_t> algorithm_identifier = {0x30}; // SEQUENCE tag
+    std::vector<uint8_t> encoded_oid_ecPublicKey = encode_oid(oid_ecPublicKey);
+    std::vector<uint8_t> encoded_oid_secp256k1 = encode_oid(oid_secp256k1);
+    std::vector<uint8_t> algorithm_identifier_content;
+    algorithm_identifier_content.insert(algorithm_identifier_content.end(), encoded_oid_ecPublicKey.begin(), encoded_oid_ecPublicKey.end());
+    algorithm_identifier_content.insert(algorithm_identifier_content.end(), encoded_oid_secp256k1.begin(), encoded_oid_secp256k1.end());
+    auto algorithm_identifier_length = encode_length(algorithm_identifier_content.size());
+    algorithm_identifier.insert(algorithm_identifier.end(), algorithm_identifier_length.begin(), algorithm_identifier_length.end());
+    algorithm_identifier.insert(algorithm_identifier.end(), algorithm_identifier_content.begin(), algorithm_identifier_content.end());
+
+    // SubjectPublicKey BIT STRING
+    std::vector<uint8_t> subject_public_key = {0x03}; // BIT STRING tag
+    std::vector<uint8_t> public_key_with_prefix = {0x00}; // Number of unused bits
+    public_key_with_prefix.insert(public_key_with_prefix.end(), public_key.begin(), public_key.end());
+    auto public_key_length = encode_length(public_key_with_prefix.size());
+    subject_public_key.insert(subject_public_key.end(), public_key_length.begin(), public_key_length.end());
+    subject_public_key.insert(subject_public_key.end(), public_key_with_prefix.begin(), public_key_with_prefix.end());
+
+    // SubjectPublicKeyInfo sequence
+    std::vector<uint8_t> subject_public_key_info = {0x30}; // SEQUENCE tag
+    std::vector<uint8_t> subject_public_key_info_content;
+    subject_public_key_info_content.insert(subject_public_key_info_content.end(), algorithm_identifier.begin(), algorithm_identifier.end());
+    subject_public_key_info_content.insert(subject_public_key_info_content.end(), subject_public_key.begin(), subject_public_key.end());
+    auto subject_public_key_info_length = encode_length(subject_public_key_info_content.size());
+    subject_public_key_info.insert(subject_public_key_info.end(), subject_public_key_info_length.begin(), subject_public_key_info_length.end());
+    subject_public_key_info.insert(subject_public_key_info.end(), subject_public_key_info_content.begin(), subject_public_key_info_content.end());
+
+    return subject_public_key_info;
 }

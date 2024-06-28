@@ -48,13 +48,17 @@ std::vector<Parameter> HttpAgent::query(const std::string& method_name, const st
     
     Request request;
     Candid candid(args);
+    std::vector<uint8_t> encoded;
     std::vector<uint8_t> _args = candid.encode();
     if(!_senderKeyPair.isInitialized()){
         request = Request(_canisterID, "query", method_name, _args);
+        encoded = request.encode();
     } else {
+        
         request = Request(_senderKeyPair.getPrincipal(), _canisterID, "query", method_name, _args);
+        encoded = request.encode(_senderKeyPair);
     }
-    std::vector<uint8_t> encoded = request.encode();
+     
     printf("Encoded request: ");
     for(auto byte : encoded) {
         printf("%02x", byte);
@@ -89,9 +93,20 @@ std::vector<Parameter> HttpAgent::query(const std::string& method_name, const st
             printf("%02x", byte);
         }
         printf("\n");
-        Response r = Response(responseBytes);
-        Candid candidResponse(r.reply.arg);
-        result = candidResponse.decode();
+        if(httpResponseCode == 200) {
+            Response r = Response(responseBytes);
+            Candid candidResponse(r.reply.arg);
+            result = candidResponse.decode();
+        } else {
+            printf("Error on sending POST: ");
+            printf("%d", httpResponseCode);
+            printf("\n");
+            printf("Error message: ");
+            printf(http.errorToString(httpResponseCode).c_str());
+            printf("\n");
+            throw std::runtime_error("Error on sending POST request");
+        }
+        
         
     } else {
         Serial.print("Error on sending POST: ");

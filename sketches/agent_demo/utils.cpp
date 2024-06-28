@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <mbedtls/sha256.h>
 #include <mbedtls/pk.h>
+#include <mbedtls/asn1write.h>
+#include <mbedtls/ecp.h>
+#include <mbedtls/bignum.h>
 #include <cstdint>
 #include <map>
 #include <cppcodec/base32_rfc4648.hpp>
@@ -159,32 +162,18 @@ std::vector<uint8_t> Utils::der_encode_signature(const std::vector<unsigned char
     return result;
 }
 
-std::vector<uint8_t> Utils::der_encode_pubkey(const Keypair& keypair) {
-    mbedtls_pk_context pk;
-    mbedtls_pk_init(&pk);
-    mbedtls_ecp_point ecp;
-    mbedtls_ecp_point_init(&ecp);
-
-    mbedtls_ecp_group grp;
-    mbedtls_ecp_group_init(&grp);
-
-    int ret = mbedtls_ecp_point_read_binary(&grp, &ecp,
-                                            keypair.getPublicKey().data(),
-                                            keypair.getPublicKey().size());
-                                            
-    if (ret != 0) {
-        // Handle error
-        return std::vector<uint8_t>();
+uint32_t Utils::crc32(const uint8_t *data, size_t length) {
+    uint32_t crc = 0xFFFFFFFF;
+    for (size_t i = 0; i < length; i++) {
+        uint8_t byte = data[i];
+        crc = crc ^ byte;
+        for (uint8_t j = 0; j < 8; j++) {
+            uint32_t mask = -(crc & 1);
+            crc = (crc >> 1) ^ (0xEDB88320 & mask);
+        }
     }
-
-    unsigned char buf[MBEDTLS_MPI_MAX_SIZE];
-    ret = mbedtls_pk_write_pubkey_der(&pk, buf, sizeof(buf));
-    if (ret < 0) {
-        // Handle error
-        return std::vector<uint8_t>();
-    }
-
-    // The mbedtls_pk_write_pubkey_der function writes the data at the end of the buffer,
-    // so we need to adjust the pointer and size
-    return std::vector<uint8_t>(buf + sizeof(buf) - ret, buf + sizeof(buf));
+    return ~crc;
 }
+
+
+

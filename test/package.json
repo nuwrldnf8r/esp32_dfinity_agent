@@ -3,12 +3,17 @@
     "version": "1.0.0",
     "description": "Your project description",
     "main": "index.js",
+    "type": "module",
     "dependencies": {
-      "@dfinity/agent": "file:../agent-js/packages/agent"
+        "@dfinity/agent": "file:../agent-js/packages/agent",
+        "base32": "^0.0.7",
+        "cbor": "^9.0.2",
+        "chai": "^5.1.1"
     },
     "scripts": {
-      "test": "echo \"Error: no test specified\" && exit 1"
+        "test": "echo \"Error: no test specified\" && exit 1"
     },
     "author": "",
-    "license": "ISC"
-  }
+    "license": "ISC",
+    "keywords": []
+}

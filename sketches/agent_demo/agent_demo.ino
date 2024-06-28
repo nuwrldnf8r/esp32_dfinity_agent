@@ -1,4 +1,5 @@
 #include "http_agent.h"
+#include "keypair.h"
 #include <stdexcept>
 #include "esp_system.h"
 #include <string>
@@ -59,7 +60,9 @@ void loop() {
             Serial.println();
             if (WiFi.status() == WL_CONNECTED) {
                 Serial.println("WiFi connected");
-                HttpAgent agent(canisterId);
+                Keypair kp = Keypair();
+                kp.initialize();
+                HttpAgent agent(canisterId, kp);
                 Parameter p = Parameter((std::string)"hello world");
                 std::vector<Parameter> args = {p};
                 std::vector<Parameter> result = agent.query("test_data", args);
