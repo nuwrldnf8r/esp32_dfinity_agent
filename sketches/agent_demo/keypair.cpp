@@ -15,6 +15,8 @@
 #include <mbedtls/error.h>
 #include <mbedtls/ecp.h>
 #include <iostream>
+#include <cstring>
+
 
 
 #define EEPROM_SIZE 100
@@ -116,6 +118,8 @@ void Keypair::initialize(){
     _private_key.assign(private_key, private_key + private_key_size);
     memset(private_key, 0, private_key_size);  // Zero out the private key buffer
 
+    _public_key.assign(public_key, public_key + public_key_size);
+
     // Convert the public key to DER format
     // Add a 0x04 byte to the start of the public key
     std::vector<uint8_t> public_key_with_prefix;
@@ -183,6 +187,8 @@ void Keypair::initialize(const std::vector<unsigned char>& private_key_buf){
     _private_key.assign(private_key, private_key + private_key_size);
     memset(private_key, 0, private_key_size);  // Zero out the private key buffer
 
+    _public_key.assign(public_key, public_key + public_key_size);
+
     // Convert the public key to DER format
     // Add a 0x04 byte to the start of the public key
     std::vector<uint8_t> public_key_with_prefix;
@@ -196,7 +202,7 @@ void Keypair::initialize(const std::vector<unsigned char>& private_key_buf){
 
 
 
-std::vector<unsigned char> Keypair::sign(const std::vector<unsigned char>& message) {
+std::vector<uint8_t> Keypair::sign(const std::vector<unsigned char>& message) {
     if (!_is_initialized) {
         throw std::runtime_error("Keypair not initialized");
     }
@@ -215,7 +221,7 @@ std::vector<unsigned char> Keypair::sign(const std::vector<unsigned char>& messa
         throw std::runtime_error("Failed to sign message. Make sure the private key and message are correct.");
     }
 
-    return std::vector<unsigned char>(signature, signature + signature_size);
+    return std::vector<uint8_t>(signature, signature + signature_size);
 }
 
 bool Keypair::verify(const std::vector<unsigned char>& message, const std::vector<uint8_t>& public_key, const std::vector<unsigned char>& signature) {
@@ -226,7 +232,7 @@ bool Keypair::verify(const std::vector<unsigned char>& message, const std::vecto
     if (message.size() > UINT16_MAX) {
         throw std::runtime_error("Message size too large to verify");
     }
-
+    printf("trying to verify\n");
     // Verify the signature
     return uECC_verify(public_key.data(), message.data(), message.size(), signature.data(), curve);
 }
@@ -240,7 +246,6 @@ std::vector<uint8_t> Keypair::getPrincipal() const {
     hash_vector.push_back(0x02);
     return hash_vector;
 }
-
 
 // Helper function to encode length in DER format
 std::vector<uint8_t> encode_length(size_t length) {

@@ -125,8 +125,8 @@ std::vector<uint8_t> Utils::cbor_hash(const std::map<std::vector<uint8_t>, std::
     std::vector<std::vector<uint8_t>> hash_pairs;
     for (const auto& [key, value] : map) {
         auto hashed_key = cbor_hash(key);
-        auto hashed_value = cbor_hash(value);
-        hash_pairs.push_back(concat(hashed_key, hashed_value));
+        //auto hashed_value = cbor_hash(value); Value is already hashed
+        hash_pairs.push_back(concat(hashed_key, value));
     }
     std::sort(hash_pairs.begin(), hash_pairs.end());
     std::vector<uint8_t> concatenated;
@@ -134,6 +134,18 @@ std::vector<uint8_t> Utils::cbor_hash(const std::map<std::vector<uint8_t>, std::
         concatenated.insert(concatenated.end(), pair.begin(), pair.end());
     }
     return sha256(concatenated);
+}
+
+std::vector<uint8_t> Utils::hex_to_bytes(const std::string& hex) {
+    std::vector<uint8_t> bytes;
+
+    for (unsigned int i = 0; i < hex.length(); i += 2) {
+        std::string byteString = hex.substr(i, 2);
+        uint8_t byte = (uint8_t) strtol(byteString.c_str(), NULL, 16);
+        bytes.push_back(byte);
+    }
+
+    return bytes;
 }
 
 std::vector<uint8_t> Utils::der_encode_signature(const std::vector<unsigned char>& signature) {

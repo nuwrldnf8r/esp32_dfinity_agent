@@ -6,6 +6,7 @@
     "type": "module",
     "dependencies": {
         "@dfinity/agent": "file:../agent-js/packages/agent",
+        "asn1.js": "^5.4.1",
         "base32": "^0.0.7",
         "cbor": "^9.0.2",
         "chai": "^5.1.1"

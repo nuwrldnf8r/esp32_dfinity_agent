@@ -207,19 +207,47 @@ std::vector<uint8_t> Request::createReadStateRequest(const std::string& canister
 }
 */
 
-std::vector<u_int8_t> Request::generateRequestId() const {
+/*
+std::vector<uint8_t> Request::generateRequestId() const {
     std::map<std::vector<uint8_t>, std::vector<uint8_t>> content_map;
-
+    std::vector<uint8_t> canister_id_bytes = Utils::uncook(_canisterId);
     // Fill content_map with the hashed key-value pairs of the content
     content_map[Utils::cbor_hash("ingress_expiry")] = Utils::cbor_hash(_ingress_expiry);
     content_map[Utils::cbor_hash("sender")] = Utils::cbor_hash(_sender.empty() ? std::vector<uint8_t>{0x04} : _sender);
-    content_map[Utils::cbor_hash("canister_id")] = Utils::cbor_hash(_canisterId);
+    content_map[Utils::cbor_hash("canister_id")] = Utils::cbor_hash(canister_id_bytes);
     content_map[Utils::cbor_hash("request_type")] = Utils::cbor_hash(_request_type);
     content_map[Utils::cbor_hash("method_name")] = Utils::cbor_hash(_method_name);
     content_map[Utils::cbor_hash("arg")] = Utils::cbor_hash(_args);
 
     // Compute the hash of the entire content map
-    return Utils::cbor_hash(content_map);
+    std::vector<uint8_t> cbor_hashed = Utils::cbor_hash(content_map);
+
+    // Append the prefix
+    std::vector<uint8_t> prefixed_request = Utils::concat(std::vector<uint8_t>{0x0A, 'i', 'c', '-', 'r', 'e', 'q', 'u', 'e', 's', 't'}, cbor_hashed);
+
+    // Compute the final hash
+    return Utils::sha256(prefixed_request);
+}
+*/
+
+
+std::vector<uint8_t> Request::generateRequestId() const {
+    std::vector<std::vector<uint8_t>> hash_pairs;
+    hash_pairs.push_back(Utils::concat(Utils::cbor_hash("ingress_expiry"), Utils::cbor_hash(_ingress_expiry)));
+    hash_pairs.push_back(Utils::concat(Utils::cbor_hash("sender"), Utils::cbor_hash(_sender.empty() ? std::vector<uint8_t>{0x04} : _sender)));
+    hash_pairs.push_back(Utils::concat(Utils::cbor_hash("canister_id"), Utils::cbor_hash(Utils::uncook(_canisterId))));
+    hash_pairs.push_back(Utils::concat(Utils::cbor_hash("request_type"), Utils::cbor_hash(_request_type)));
+    hash_pairs.push_back(Utils::concat(Utils::cbor_hash("method_name"), Utils::cbor_hash(_method_name)));
+    hash_pairs.push_back(Utils::concat(Utils::cbor_hash("arg"), Utils ::cbor_hash(_args)));
+    std::sort(hash_pairs.begin(), hash_pairs.end());
+    std::vector<uint8_t> concatenated;
+    for (const auto& pair : hash_pairs) {
+        concatenated.insert(concatenated.end(), pair.begin(), pair.end());
+    }
+    auto hashed = Utils::sha256(concatenated);
+    return hashed;
+    std::vector<uint8_t> prefixed_request = Utils::concat(std::vector<uint8_t>{0x0A, 'i', 'c', '-', 'r', 'e', 'q', 'u', 'e', 's', 't'}, hashed);
+    return prefixed_request;
 }
 
 void Request::sign(Keypair keypair) {
@@ -237,15 +265,39 @@ void Request::sign(Keypair keypair) {
 
     // Generate the request ID
     printf("generating request id\n");
-    std::vector<unsigned char> requestIdVec = generateRequestId();
-    std::string requestId(requestIdVec.begin(), requestIdVec.end());
-    std::string message = requestId + "\x0Aic-request";
-    std::vector<uint8_t> message_vector(message.begin(), message.end());
-    std::vector<uint8_t> hash = Utils::sha256(message_vector);
+    std::vector<uint8_t> requestId = generateRequestId();
+    //add prefix
+    std::vector<uint8_t> to_sign = Utils::concat(std::vector<uint8_t>{0x0A, 'i', 'c', '-', 'r', 'e', 'q', 'u', 'e', 's', 't'}, requestId);
+    
+    //to_sign = Utils::sha256(Utils::concat(to_sign, _sender_pubkey));
+    to_sign = Utils::sha256(to_sign);
+
+
+    //TODO - try sha
 
     // Generate the signature
     printf("signing\n");
-    std::vector<unsigned char> signature = keypair.sign(hash);
+    std::vector<uint8_t> signature = keypair.sign(to_sign);
+    printf("signature:\n");
+    for(auto byte : signature){
+        printf("%02x", byte);
+    }
+    printf("\n");
+
+    printf("actual public key:\n");    
+    for(auto byte : keypair._public_key){
+        printf("%02x", byte);
+    }
+    printf("\n");
+
+    
+    bool isVerified = keypair.verify(to_sign, keypair._public_key, signature);
+    if(!isVerified){
+        printf("not verified\n");
+        throw std::runtime_error("Signature verification failed");
+    }
+    printf("verified\n");
+    
     _sender_sig = signature; //Utils::der_encode_signature(signature);
     printf("signed\n");
 }

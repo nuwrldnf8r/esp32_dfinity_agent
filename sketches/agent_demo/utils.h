@@ -25,6 +25,7 @@ class Utils{
         static std::vector<uint8_t> cbor_hash(const std::map<std::vector<uint8_t>, std::vector<uint8_t>>& map);
         static std::vector<uint8_t> der_encode_signature(const std::vector<unsigned char>& signature);
         static uint32_t crc32(const uint8_t *data, size_t length);
+        static std::vector<uint8_t> hex_to_bytes(const std::string& hex);
         
 };
 #endif // UTILS_H
