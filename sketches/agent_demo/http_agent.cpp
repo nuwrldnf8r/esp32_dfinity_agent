@@ -39,7 +39,84 @@ HttpAgent::HttpAgent(const std::string& canisterID, const Keypair& senderKeyPair
     _initialized = true;
 }  
 
+std::vector<Parameter> HttpAgent::post(const std::string& method, const std::string& method_name, const std::vector<Parameter>& args){
+    std::vector<Parameter> result;
+    if(!_initialized) {
+        throw std::runtime_error("HttpAgent not initialized");
+    }
+    
+    Request request;
+    Candid candid(args);
+    std::vector<uint8_t> encoded;
+    std::vector<uint8_t> _args = candid.encode();
+    if(!_senderKeyPair.isInitialized()){
+        request = Request(_canisterID, "query", method_name, _args);
+        encoded = request.encode();
+    } else {
+        
+        request = Request(_senderKeyPair.getPrincipal(), _canisterID, method, method_name, _args);
+        encoded = request.encode(_senderKeyPair);
+    }
 
+    String encodedCanisterId = urlEncode(_canisterID.c_str());
+    String url = baseURL + encodedCanisterId + "/" + method.c_str();
+    //for now/////////////////////////////////////
+    _client.setInsecure();
+    /////////////////////////////////////////////
+    HTTPClient http;
+    http.begin(_client, url);
+    http.addHeader("Content-Type", "application/cbor");
+    //http.addHeader("X-Canister-Authz", "Bearer " + _senderKeyPair.getPrincipal()); 
+    
+    printf("Connecting to ");
+    printf(url.c_str());
+    printf("\n");
+
+    int httpResponseCode = http.POST(encoded.data(), encoded.size()); 
+    if (httpResponseCode > 0) {
+        printf("Response code: \n%d", httpResponseCode);
+        printf("\n");
+        
+        String response = http.getString();
+
+        // Assuming you get a CBOR response and want to print it as hex
+        std::vector<uint8_t> responseBytes(response.begin(), response.end());
+        for(auto byte : responseBytes) {
+            printf("%02x", byte);
+        }
+        printf("\n");
+        if(httpResponseCode == 200) {
+            Response r = Response(responseBytes);
+            Candid candidResponse(r.reply.arg);
+            result = candidResponse.decode();
+        } else {
+            printf("Error on sending POST: ");
+            printf("%d", httpResponseCode);
+            printf("\n");
+            printf("Error message: ");
+            std::string responseString(responseBytes.begin(), responseBytes.end());
+            printf(responseString.c_str());
+            printf("\n");
+        }
+        
+        
+    } else {
+        Serial.print("Error on sending POST: ");
+        Serial.println(httpResponseCode);
+        Serial.print("Error message: ");
+        Serial.println(http.errorToString(httpResponseCode).c_str());
+        throw std::runtime_error("Error on sending POST request");
+    }
+    http.end();      
+
+    return result;
+}
+
+std::vector<Parameter> HttpAgent::query(const std::string& method_name, const std::vector<Parameter>& args) {
+    return post("query", method_name, args);
+}
+
+/*
 std::vector<Parameter> HttpAgent::query(const std::string& method_name, const std::vector<Parameter>& args) {
     std::vector<Parameter> result;
     if(!_initialized) {
@@ -58,13 +135,6 @@ std::vector<Parameter> HttpAgent::query(const std::string& method_name, const st
         request = Request(_senderKeyPair.getPrincipal(), _canisterID, "query", method_name, _args);
         encoded = request.encode(_senderKeyPair);
     }
-     
-    printf("Encoded request: ");
-    for(auto byte : encoded) {
-        printf("%02x", byte);
-    }   
-    printf("\n");
-
 
     String encodedCanisterId = urlEncode(_canisterID.c_str());
     String url = baseURL + encodedCanisterId + "/query";
@@ -102,9 +172,9 @@ std::vector<Parameter> HttpAgent::query(const std::string& method_name, const st
             printf("%d", httpResponseCode);
             printf("\n");
             printf("Error message: ");
-            printf(http.errorToString(httpResponseCode).c_str());
+            std::string responseString(responseBytes.begin(), responseBytes.end());
+            printf(responseString.c_str());
             printf("\n");
-            throw std::runtime_error("Error on sending POST request");
         }
         
         
@@ -119,6 +189,7 @@ std::vector<Parameter> HttpAgent::query(const std::string& method_name, const st
 
     return result;
 }
+*/
 
 
 /*

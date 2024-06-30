@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <map>
 #include <cppcodec/base32_rfc4648.hpp>
+#include <sstream>
 
 
 using base32 = cppcodec::base32_rfc4648;
@@ -129,6 +130,7 @@ std::vector<uint8_t> Utils::cbor_hash(const std::map<std::vector<uint8_t>, std::
         hash_pairs.push_back(concat(hashed_key, value));
     }
     std::sort(hash_pairs.begin(), hash_pairs.end());
+    
     std::vector<uint8_t> concatenated;
     for (const auto& pair : hash_pairs) {
         concatenated.insert(concatenated.end(), pair.begin(), pair.end());
@@ -186,6 +188,7 @@ uint32_t Utils::crc32(const uint8_t *data, size_t length) {
     }
     return ~crc;
 }
+
 
 
 
