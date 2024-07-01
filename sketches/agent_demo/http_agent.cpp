@@ -50,10 +50,9 @@ std::vector<Parameter> HttpAgent::post(const std::string& method, const std::str
     std::vector<uint8_t> encoded;
     std::vector<uint8_t> _args = candid.encode();
     if(!_senderKeyPair.isInitialized()){
-        request = Request(_canisterID, "query", method_name, _args);
+        request = Request(_canisterID, method, method_name, _args);
         encoded = request.encode();
     } else {
-        
         request = Request(_senderKeyPair.getPrincipal(), _canisterID, method, method_name, _args);
         encoded = request.encode(_senderKeyPair);
     }
@@ -85,18 +84,33 @@ std::vector<Parameter> HttpAgent::post(const std::string& method, const std::str
             printf("%02x", byte);
         }
         printf("\n");
+
         if(httpResponseCode == 200) {
             Response r = Response(responseBytes);
-            Candid candidResponse(r.reply.arg);
-            result = candidResponse.decode();
+            printf("Received:\n");
+            for(auto byte : r.reply.arg) {
+                printf("%02x", byte);
+            }   
+            printf("\n");
+            if(r.reply.arg.size() == 0) {
+                printf("Empty response\n");
+                result = {};
+            } else {
+                Candid candidResponse(r.reply.arg);
+                result = candidResponse.decode();
+            }
+        } else if(httpResponseCode == 202){
+            //manage call request
+
         } else {
+            //Response r = Response(responseBytes);
             printf("Error on sending POST: ");
             printf("%d", httpResponseCode);
             printf("\n");
-            printf("Error message: ");
-            std::string responseString(responseBytes.begin(), responseBytes.end());
-            printf(responseString.c_str());
+            printf("Error message: \n");
+            printf("%s\n", http.errorToString(httpResponseCode).c_str()); // Print the error message here
             printf("\n");
+            return {};
         }
         
         
@@ -112,9 +126,17 @@ std::vector<Parameter> HttpAgent::post(const std::string& method, const std::str
     return result;
 }
 
+std::vector<Parameter> HttpAgent::update(const std::string& method_name, const std::vector<Parameter>& args) {
+    return post("call", method_name, args);
+}
+
 std::vector<Parameter> HttpAgent::query(const std::string& method_name, const std::vector<Parameter>& args) {
     return post("query", method_name, args);
 }
+
+
+
+
 
 /*
 std::vector<Parameter> HttpAgent::query(const std::string& method_name, const std::vector<Parameter>& args) {

@@ -60,17 +60,33 @@ void loop() {
             Serial.println();
             if (WiFi.status() == WL_CONNECTED) {
                 Serial.println("WiFi connected");
+
                 Keypair kp = Keypair();
                 kp.initialize();
                 HttpAgent agent(canisterId, kp);
-                Parameter p = Parameter((std::string)"hello world");
+                Parameter p = Parameter((std::string)"yay this works");
                 std::vector<Parameter> args = {p};
-                std::vector<Parameter> result = agent.query("test_data", args);
+                std::vector<Parameter> result = agent.update("set_data", args);
+                printf("**********************************");
+                printf("Result: ");
+                if(result.size() > 0) {
+                    printf(result[0].parseText().c_str());
+                    printf("\n");
+                } 
+               
+                printf("**********************************");
+
+                delay(5000);
+                
+                HttpAgent agent2(canisterId, kp);
+                args = {};
+                result = agent.query("get_data", args);
                 printf("**********************************");
                 printf("Result: ");
                 printf(result[0].parseText().c_str());
                 printf("\n");
                 printf("**********************************");
+                
             }
         } catch (const std::exception& e) {
             Serial.println("An exception occurred");
