@@ -1,27 +1,20 @@
 #include "uECC.h"
-#include "esp_system.h"
 #include "keypair.h"
-#include "esp_system.h"
 #include "utils.h"
 #include <stdexcept>
 #include <stdint.h>
 #include <stddef.h>
-#include <vector>
 #include <cstring>
 #include <EEPROM.h>
-#include "mbedtls/sha256.h"
 #include <mbedtls/pk.h>
 #include <mbedtls/pem.h>
 #include <mbedtls/error.h>
 #include <mbedtls/ecp.h>
 #include <cstring>
 
-
-
 #define EEPROM_SIZE 100
 #define MARKER_ADDRESS 0
 #define MARKER 0xABFF
-
 
 int esp_random_function(uint8_t *dest, unsigned size) {
     esp_fill_random(dest, size);
@@ -57,7 +50,7 @@ std::vector<uint8_t> readVectorFromEEPROM(size_t dataSize, int startAddress) {
 
 std::vector<unsigned char> readPrivateKeyFromStorage(){
     if (!EEPROM.begin(EEPROM_SIZE)) {
-        Serial.println("Failed to initialize EEPROM");
+        //Serial.println("Failed to initialize EEPROM");
         return std::vector<unsigned char>();  // Return an empty vector
     }
     std::vector<uint8_t> private_key_buf = readVectorFromEEPROM(32, 2);
@@ -82,7 +75,7 @@ void Keypair::initialize(){
     // Compute the public key from the private key
     if (!uECC_compute_public_key(private_key, public_key, curve)) {
         memset(private_key, 0, private_key_size);
-        throw std::runtime_error("Failed to generate key pair");
+        throw std::runtime_error("");//Failed to generate key pair");
     }
 
     // Assign private key to buffer and zero out sensitive data
@@ -104,9 +97,9 @@ void Keypair::initialize(){
 }
 
 void Keypair::initialize(bool from_storage){
-    Serial.println("Starting initialization with storage flag...");
+    //Serial.println("Starting initialization with storage flag...");
     if (!EEPROM.begin(EEPROM_SIZE)) {
-        Serial.println("Failed to initialize EEPROM");
+        //Serial.println("Failed to initialize EEPROM");
         return;
     }
     if (from_storage) {
@@ -143,7 +136,7 @@ void Keypair::initialize(const std::vector<unsigned char>& private_key_buf){
 
     // Ensure the provided private key buffer is the correct size
     if (private_key_buf.size() != private_key_size) {
-        throw std::runtime_error("Invalid private key size");
+        throw std::runtime_error("");//Invalid private key size");
     }
 
     std::memcpy(private_key, private_key_buf.data(), private_key_size);
@@ -151,7 +144,7 @@ void Keypair::initialize(const std::vector<unsigned char>& private_key_buf){
     // Compute the public key from the private key
     if (!uECC_compute_public_key(private_key, public_key, curve)) {
         memset(private_key, 0, private_key_size);
-        throw std::runtime_error("Failed to compute public key");
+        throw std::runtime_error("");//Failed to compute public key");
     }
 
     // Assign private key to buffer and zero out sensitive data
@@ -175,7 +168,7 @@ void Keypair::initialize(const std::vector<unsigned char>& private_key_buf){
 
 std::vector<uint8_t> Keypair::sign(const std::vector<unsigned char>& message) {
     if (!_is_initialized) {
-        throw std::runtime_error("Keypair not initialized");
+        throw std::runtime_error("");//Keypair not initialized");
     }
     //uECC_set_rng(esp_random_function);
     uECC_Curve curve = uECC_secp256k1();
@@ -184,12 +177,12 @@ std::vector<uint8_t> Keypair::sign(const std::vector<unsigned char>& message) {
 
     // Ensure message size does not exceed maximum allowed size
     if (message.size() > UINT16_MAX) {
-        throw std::runtime_error("Message size too large to sign");
+        throw std::runtime_error("");//Message size too large to sign");
     }
 
     // Sign the message
     if (!uECC_sign(_private_key.data(), message.data(), message.size(), signature, curve)) {
-        throw std::runtime_error("Failed to sign message. Make sure the private key and message are correct.");
+        throw std::runtime_error("");//Failed to sign message. Make sure the private key and message are correct.");
     }
 
     return std::vector<uint8_t>(signature, signature + signature_size);
@@ -201,7 +194,7 @@ bool Keypair::verify(const std::vector<unsigned char>& message, const std::vecto
 
     // Ensure message size does not exceed maximum allowed size
     if (message.size() > UINT16_MAX) {
-        throw std::runtime_error("Message size too large to verify");
+        throw std::runtime_error("");//Message size too large to verify");
     }
     printf("trying to verify\n");
     // Verify the signature

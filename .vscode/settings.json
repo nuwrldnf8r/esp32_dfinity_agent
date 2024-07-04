@@ -66,6 +66,7 @@
         "__tree": "cpp",
         "iostream": "cpp",
         "map": "cpp",
-        "numeric": "cpp"
+        "numeric": "cpp",
+        "functional": "cpp"
     }
 }
