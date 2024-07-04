@@ -1,5 +1,4 @@
 #include "uECC.h"
-#include "esp_system.h"
 #include "keypair.h"
 #include "esp_system.h"
 #include "utils.h"

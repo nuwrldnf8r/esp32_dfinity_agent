@@ -1,61 +1,27 @@
 #include "uECC.h"
 #include "keypair.h"
+#include "esp_system.h"
 #include "utils.h"
 #include <stdexcept>
 #include <stdint.h>
 #include <stddef.h>
+#include <vector>
 #include <cstring>
 #include <EEPROM.h>
+#include "mbedtls/sha256.h"
 #include <mbedtls/pk.h>
 #include <mbedtls/pem.h>
 #include <mbedtls/error.h>
 #include <mbedtls/ecp.h>
 #include <cstring>
 
-#define EEPROM_SIZE 100
-#define MARKER_ADDRESS 0
-#define MARKER 0xABFF
+
 
 int esp_random_function(uint8_t *dest, unsigned size) {
     esp_fill_random(dest, size);
     return 1; 
 }
 
-void writeMarker() {
-    EEPROM.write(MARKER_ADDRESS, (MARKER >> 8) & 0xFF);
-    EEPROM.write(MARKER_ADDRESS + 1, MARKER & 0xFF);
-    EEPROM.commit();
-}
-
-bool checkDataExists() {
-    uint16_t marker = (EEPROM.read(MARKER_ADDRESS) << 8) | EEPROM.read(MARKER_ADDRESS + 1);
-    return marker == MARKER;
-}
-
-void writeVectorToEEPROM(const std::vector<uint8_t>& data, int startAddress) {
-    for (size_t i = 0; i < data.size(); ++i) {
-        EEPROM.write(startAddress + i, data[i]);
-    }
-    EEPROM.commit();
-}
-
-std::vector<uint8_t> readVectorFromEEPROM(size_t dataSize, int startAddress) {
-    std::vector<uint8_t> data(dataSize);
-    for (size_t i = 0; i < dataSize; ++i) {
-        data[i] = EEPROM.read(startAddress + i);
-    }
-    return data;
-}
-
-
-std::vector<unsigned char> readPrivateKeyFromStorage(){
-    if (!EEPROM.begin(EEPROM_SIZE)) {
-        //Serial.println("Failed to initialize EEPROM");
-        return std::vector<unsigned char>();  // Return an empty vector
-    }
-    std::vector<uint8_t> private_key_buf = readVectorFromEEPROM(32, 2);
-    return std::vector<unsigned char>(private_key_buf.begin(), private_key_buf.end());
-}
 
 
 Keypair::Keypair(){}
@@ -96,34 +62,6 @@ void Keypair::initialize(){
    
 }
 
-void Keypair::initialize(bool from_storage){
-    //Serial.println("Starting initialization with storage flag...");
-    if (!EEPROM.begin(EEPROM_SIZE)) {
-        //Serial.println("Failed to initialize EEPROM");
-        return;
-    }
-    if (from_storage) {
-        bool exists = checkDataExists();
-        printf("Data exists: %d\n", exists);
-        if(!exists){
-            printf("Writing marker\n");
-            writeMarker();
-            initialize();
-            writeVectorToEEPROM(_private_key, 2);
-            
-        } else {
-            std::vector<unsigned char> private_key_buf = readPrivateKeyFromStorage();
-            initialize(private_key_buf);
-        }
-      
-    } else {
-        initialize();
-    }
-    EEPROM.end();
-}
-
-#include <vector>
-#include <stdexcept>
 
 void Keypair::initialize(const std::vector<unsigned char>& private_key_buf){
     _is_initialized = true;

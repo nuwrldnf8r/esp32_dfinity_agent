@@ -27,7 +27,8 @@ class Utils{
         static uint32_t crc32(const uint8_t *data, size_t length);
         static std::vector<uint8_t> hex_to_bytes(const std::string& hex);
         static std::string bytes_to_hex(const std::vector<uint8_t>& bytes);
-        
+        static std::vector<uint8_t> string_to_vector(const std::string& str);
+        static std::string vector_to_string(const std::vector<uint8_t>& vec);
         
 };
 #endif // UTILS_H

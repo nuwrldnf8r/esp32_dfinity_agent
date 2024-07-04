@@ -2,19 +2,15 @@
 #include "http_agent.h"
 #include "keypair.h"
 #include "utils.h"
+//#include "eeprom_vector_storage.h"
 #include <LoRa.h>
 #include <SPI.h>
-//#include <BLEDevice.h>
-//#include <BLEServer.h>
-//#include <BLEUtils.h>
-//#include <BLE2902.h>
 #include <WiFi.h>
-//#include <HTTPClient.h>
-//#include <WiFiClientSecure.h>
 #include <time.h>
+#include <Preferences.h>
 
 Keypair keypair;
-
+Preferences preferences;
 
 /*
   Outgoing message types:
@@ -56,6 +52,7 @@ Keypair keypair;
 #define STATUS_NOT_REGISTERED 0x05
 #define STATUS_REGISTERING 0x06
 #define STATUS_REGISTERED 0x07
+#define STATUS_ERROR_WIFI_NOTCONNECTED 0xF1
 
 #define MESSAGE_TYPE_STATUS 0x00
 #define MESSAGE_TYPE_DATA 0x01
@@ -73,7 +70,6 @@ Keypair keypair;
 
 
 bool deviceConnected = false;
-//BLECharacteristic *pCharacteristic;
 uint8_t status_;
 int value = 0;
 
@@ -95,10 +91,21 @@ void processWifiCredentials(const String& wifi_credentials){
     std::string password = _data.substring(4 + lssid, 4 + lssid + lpassword).c_str();
     status_ = STATUS_INITIALIZE_WITH_WIFI;
     setWIFI(ssid.c_str(), password.c_str());
+    
+    if(WiFi.status() == WL_CONNECTED){
+        //store wifi credentials
+        writeVector("ssid", Utils::string_to_vector(ssid));
+        writeVector("password", Utils::string_to_vector(password));
+    } else {
+        status_ = STATUS_ERROR_WIFI_NOTCONNECTED;
+    }
+    
 }
 
 void setWIFI(const char* ssid, const char* password){
-    
+    Serial.println("Setting up Wi-Fi");
+    Serial.println("SSID: " + String(ssid));
+    Serial.println("Password: " + String(password));
     // Connect to Wi-Fi
     WiFi.begin(ssid, password);
 
@@ -116,7 +123,6 @@ void setWIFI(const char* ssid, const char* password){
 
 std::string getStatus(){
   std::vector<uint8_t> _m = {MESSAGE_TYPE_STATUS, status_, '\n'};
-  
   return MAGIC_PREFIX + Utils::bytes_to_hex(_m);
 }
 
@@ -136,18 +142,62 @@ uint8_t requestType(const String& data){
   return _m[0];
 }
 
+void writeVector(const char* key, const std::vector<uint8_t>& vec) {
+    preferences.putBytes(key, vec.data(), vec.size());
+}
+
+std::vector<uint8_t> readVector(const char* key) {
+    size_t size = preferences.getBytesLength(key);
+    std::vector<uint8_t> vec(size);
+    preferences.getBytes(key, vec.data(), size);
+    return vec;
+}
+
+void printVector(const std::vector<uint8_t>& vec, const String& name) {
+    Serial.print(name + ": ");
+    for (size_t i = 0; i < vec.size(); ++i) {
+        Serial.print(vec[i], HEX);
+        if (i < vec.size() - 1) {
+            Serial.print(", ");
+        }
+    }
+    Serial.println();
+}
+
 
 void setup(){
-    Serial.begin(115200);
+  Serial.begin(9600); //115200
+  preferences.begin("_", false);
+  //preferences.clear();
+  //preferences.end();
 
-    keypair.initialize();
-    status_ = STATUS_INITIALIZED;
   
+   std::vector<uint8_t> private_key = readVector("pk");
+  if(private_key.size() > 0){
+    keypair.initialize(private_key);
+  } else {
+    Serial.println("Generating new keypair");
+    keypair.initialize();
+    //store private key
+    writeVector("pk", keypair.getPrivateKey());
+  }
+  status_ = STATUS_INITIALIZED;
+  
+  //get wifi credientials from storage
+  std::vector<uint8_t> ssid_ = readVector("ssid");
+  std::vector<uint8_t> password_ = readVector("password");
+  if(ssid_.size() > 0 && password_.size() > 0){
+    setWIFI(Utils::vector_to_string(ssid_).c_str(), Utils::vector_to_string(password_).c_str());
+    if(WiFi.status() == WL_CONNECTED){
+      status_ = STATUS_CONNECTED;
+    } else {
+      status_ = STATUS_ERROR_WIFI_NOTCONNECTED;
+    }
+  }
   
 }
 
 void loop(){
-  
   if (Serial.available() > 0) {
       // Read the incoming data
       String incomingData = Serial.readStringUntil('\n');

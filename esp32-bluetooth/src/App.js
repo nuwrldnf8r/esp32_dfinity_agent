@@ -10,20 +10,6 @@ function App() {
   const [password, setPassword] = useState('')
 
 
-  function getHexValue(str) {
-    return Array.from(str)
-      .map(c => c.charCodeAt(0).toString(16).padStart(2, '0'))
-      .join('');
-  }
-
-  async function  getStatus() {
-    if (port ) {
-      const encoder = new TextEncoder();
-      const writer = port.writable.getWriter();
-      await writer.write(encoder.encode('ESMSG00\n'));
-      writer.releaseLock();
-    }
-  }
 
   async function  setWifi() {
     if (port!==null && ssid.length > 0 && password.length > 0) {
@@ -85,6 +71,7 @@ function App() {
                     }
                     
                   });
+                  //console.log(data)
                 }
               } catch (error) {
                 console.log(error)
@@ -108,7 +95,7 @@ function App() {
       if(connectStatus > 0) return
       setConnectStatus(1);
       const port = await navigator.serial.requestPort();
-      await port.open({ baudRate: 115200 });
+      await port.open({ baudRate: 9600 }); //115200
       setPort(port);
       setReader(port.readable.getReader());
       setConnectStatus(2);

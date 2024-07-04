@@ -246,6 +246,14 @@ uint32_t Utils::crc32(const uint8_t *data, size_t length) {
     return ~crc;
 }
 
+std::vector<uint8_t> Utils::string_to_vector(const std::string& str) {
+    std::vector<uint8_t> vec(str.begin(), str.end());
+    return vec;
+}
 
+std::string Utils::vector_to_string(const std::vector<uint8_t>& vec) {
+    std::string str(vec.begin(), vec.end());
+    return str;
+}
 
 
