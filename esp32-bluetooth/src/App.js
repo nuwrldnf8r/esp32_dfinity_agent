@@ -167,9 +167,9 @@ function App() {
   
 
   return (
-    <div className="App">
+    <div className="App" style={{marginLeft: 20, marginRight: 20}}>
       <header className="App-header">
-        <h1>Earthstream Sensor Setup</h1>
+        <h1 style={{textAlign: 'center'}}>Earthstream Gateway Setup</h1>
         {!signedIn &&
           <div style={{textAlign: 'center'}}><button style={{marginTop: 150, fontSize: 18, height: 40, width: 100}} onClick={async ()=>{
             const _authClient = await AuthClient.create()
