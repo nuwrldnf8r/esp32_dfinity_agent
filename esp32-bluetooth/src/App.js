@@ -1,13 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react'
+import { AuthClient } from "@dfinity/auth-client"
 
 function App() {
-  const [port, setPort] = useState(null);
-  const [reader, setReader] = useState(null);
-  const [data, setData] = useState('');
-  const [connectStatus, setConnectStatus] = useState(0);
-  const [status, setStatus] = useState('');
+  const [port, setPort] = useState(null)
+  const [reader, setReader] = useState(null)
+  const [data, setData] = useState('')
+  const [connectStatus, setConnectStatus] = useState(0)
+  const [status, setStatus] = useState('')
   const [ssid, setSSID] = useState('')
   const [password, setPassword] = useState('')
+  const [signedIn, setSignedIn] = useState(false)
+  const [authClient, setAuthClient] = useState(null)
+  const principal = useRef(null)
+
 
 
 
@@ -18,18 +23,41 @@ function App() {
       let lenPassword = (password.length).toString(16).padStart(2, '0')
       let msg = 'ESMSG01' + lenSSID + lenPassword + ssid + password + '\n'
       console.log('msg:', msg)
-      const encoder = new TextEncoder();
-      const writer = port.writable.getWriter();
-      await writer.write(encoder.encode(msg));
-      writer.releaseLock();
+      const encoder = new TextEncoder()
+      const writer = port.writable.getWriter()
+      await writer.write(encoder.encode(msg))
+      writer.releaseLock()
     }
   }
   
   useEffect(() => {
+    function sendPrincipal() {
+      if (port!==null) {
+        (async () => {
+          principal.current = await authClient.getIdentity()
+          if(principal.current) {
+            console.log('Principal:')
+            let _principal = principal.current.getPrincipal().toString()
+            console.log(_principal)
+            
+            let msg = 'ESMSG02' + principal + '\n'
+            console.log('msg:', msg)
+            const encoder = new TextEncoder()
+            const writer = port.writable.getWriter()
+            await writer.write(encoder.encode(msg))
+            writer.releaseLock()
+            
+          }
+
+        })()
+      }
+    }
+    
+
     function read() {
       if (port ) {
-        const encoder = new TextEncoder();
-        const writer = port.writable.getWriter();
+        const encoder = new TextEncoder()
+        const writer = port.writable.getWriter()
         writer.write(encoder.encode('ESMSG00\n')).then(() => writer.releaseLock())
       }
       if (reader !== null) {
@@ -38,14 +66,14 @@ function App() {
               try{
                 while (true) {
                   
-                  const { value, done } = await reader.read();
+                  const { value, done } = await reader.read()
                   if (done) {
-                    break;
+                    break
                   }
-                  
+
                   setData((prevOutput) => {
                     let _data = prevOutput + new TextDecoder().decode(value)
-                    let ar = _data.split('ESMSG');
+                    let ar = _data.split('ESMSG')
                     
                     let msg = ar[ar.length-1]
                     if(msg.indexOf('\n') === -1) return _data
@@ -70,7 +98,7 @@ function App() {
                       return _data
                     }
                     
-                  });
+                  })
                   //console.log(data)
                 }
               } catch (error) {
@@ -85,27 +113,30 @@ function App() {
         
       }
     }
-    const intervalId = setInterval(read, 1000);
-    return () => clearInterval(intervalId);
-  });
+    if(!principal.current)sendPrincipal()
+    const intervalId = setInterval(read, 1000)
+    return () => clearInterval(intervalId)
+  })
+  
   
 
   const connect = async () => {
     try {
       if(connectStatus > 0) return
-      setConnectStatus(1);
-      const port = await navigator.serial.requestPort();
-      await port.open({ baudRate: 9600 }); //115200
-      setPort(port);
-      setReader(port.readable.getReader());
-      setConnectStatus(2);
+      setConnectStatus(1)
+      const port = await navigator.serial.requestPort()
+      await port.open({ baudRate: 9600 }) //115200
+      setPort(port)
+      setReader(port.readable.getReader())
+      setConnectStatus(2)
+      
       
     } catch (error) {
-      console.error('Error connecting to the serial port:', error);
-      setConnectStatus(0);
+      console.error('Error connecting to the serial port:', error)
+      setConnectStatus(0)
       setStatus('')
     }
-  };
+  }
 
   function showStatus () {
     switch(status){
@@ -133,28 +164,47 @@ function App() {
     }
   }
 
+  
+
   return (
     <div className="App">
       <header className="App-header">
-        <h1>ESP32 Serial Communication</h1>
-        {connectStatus === 0 &&
-          <button onClick={connect}>Connect</button>
+        <h1>Earthstream Sensor Setup</h1>
+        {!signedIn &&
+          <div style={{textAlign: 'center'}}><button style={{marginTop: 150, fontSize: 18, height: 40, width: 100}} onClick={async ()=>{
+            const _authClient = await AuthClient.create()
+            _authClient.login({
+              // 30 mins
+              maxTimeToLive: Number(30 * 60 * 1000 * 1000 * 1000),
+              onSuccess: async () => {
+                setSignedIn(true)
+                setAuthClient(_authClient)
+              },
+            })
+          }}>Sign in</button></div>
         }
-        {connectStatus === 1 && 
-          <div>Connecting...</div>
-        }
-        {connectStatus === 2 && 
-          <div>Connected</div>
-        }
-        <div>Gateway status: {showStatus()}</div>
-        
-        <div style={{marginBottom: 3, marginTop: 5}}>WIFI Name: <input type="text" onChange={(e) => setSSID(e.target.value)} value={ssid} /></div>
-        <div style={{marginBottom: 3}}>Password: <input type="text" onChange={(e) => setPassword(e.target.value)} value={password} /></div>
-        <div><button onClick={setWifi}>Update Sensor WIFI settings</button></div>
-        
       </header>
+      {signedIn &&
+        <div>
+          {connectStatus === 0 &&
+            <button onClick={connect}>Connect</button>
+          }
+          {connectStatus === 1 && 
+            <div>Connecting...</div>
+          }
+          {connectStatus === 2 && 
+            <div>Connected</div>
+          }
+          <div>Gateway status: {showStatus()}</div>
+          
+          <div style={{marginBottom: 3, marginTop: 5}}>WIFI Name: <input type="text" onChange={(e) => setSSID(e.target.value)} value={ssid} /></div>
+          <div style={{marginBottom: 3}}>Password: <input type="text" onChange={(e) => setPassword(e.target.value)} value={password} /></div>
+          <div><button onClick={setWifi}>Update Sensor WIFI settings</button></div>
+          
+        </div>
+      }
     </div>
-  );
+  )
 }
 
-export default App;
+export default App

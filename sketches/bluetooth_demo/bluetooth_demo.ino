@@ -53,6 +53,7 @@ Preferences preferences;
 #define STATUS_REGISTERING 0x06
 #define STATUS_REGISTERED 0x07
 #define STATUS_ERROR_WIFI_NOTCONNECTED 0xF1
+#define STATUS_ERROR_PRINCIPAL_MISMATCH 0xF2
 
 #define MESSAGE_TYPE_STATUS 0x00
 #define MESSAGE_TYPE_DATA 0x01
@@ -72,6 +73,9 @@ Preferences preferences;
 bool deviceConnected = false;
 uint8_t status_;
 int value = 0;
+std::string principal_ = "";
+bool invalidPrincipal_ = false;
+bool isRegistered_ = false;
 
 void log(const std::string& message){
   std::vector<uint8_t> _m = {MESSAGE_TYPE_LOGGING};
@@ -79,7 +83,21 @@ void log(const std::string& message){
   Serial.print(_message.c_str());
 }
 
+bool isRegistered(){
+  if(isRegistered_) return true;
+  //check on the network
+  return false;
+}
+
+void registerOnNetwork(){
+
+}
+
 void processWifiCredentials(const String& wifi_credentials){
+    if(invalidPrincipal_){
+        status_ = STATUS_ERROR_PRINCIPAL_MISMATCH;
+        return;
+    }
     log("Processing wifi credentials");
     String _data = wifi_credentials.substring(strlen(MAGIC_PREFIX) + 2);
     if(_data.length() < 2){
@@ -99,6 +117,33 @@ void processWifiCredentials(const String& wifi_credentials){
     } else {
         status_ = STATUS_ERROR_WIFI_NOTCONNECTED;
     }
+    
+}
+
+void processOwnerPrincipal(const String& owner_principal){
+    log("Processing owner principal");
+    String _principal = owner_principal.substring(strlen(MAGIC_PREFIX) + 2);
+    //check if principal exists 
+    if(principal_.length()>0){
+        //if exists, check if == stored principal
+        if(principal_ != _principal.c_str()){
+            //if not, error
+            status_ = STATUS_ERROR_PRINCIPAL_MISMATCH;
+            invalidPrincipal_ = true;
+            return;
+        }
+    } else {
+        //if not - store
+        principal_ = _principal.c_str();
+        writeVector("principal", Utils::string_to_vector(principal_));
+    }
+
+    //if not STATUS_ERROR_PRINCIPAL_MISMATCH, register on network
+    if(!status_ == STATUS_ERROR_PRINCIPAL_MISMATCH){
+        //register on network
+        registerOnNetwork();
+    }
+   
     
 }
 
@@ -182,6 +227,13 @@ void setup(){
     writeVector("pk", keypair.getPrivateKey());
   }
   status_ = STATUS_INITIALIZED;
+
+  //get principal from storage
+  std::vector<uint8_t> _principal = readVector("principal");
+  if(_principal.size() > 0){
+    principal_ = Utils::vector_to_string(_principal);
+    //check if registered on the network
+  } 
   
   //get wifi credientials from storage
   std::vector<uint8_t> ssid_ = readVector("ssid");
@@ -190,6 +242,9 @@ void setup(){
     setWIFI(Utils::vector_to_string(ssid_).c_str(), Utils::vector_to_string(password_).c_str());
     if(WiFi.status() == WL_CONNECTED){
       status_ = STATUS_CONNECTED;
+      if(!isRegistered() && principal_.length()>0){
+        registerOnNetwork();
+      }
     } else {
       status_ = STATUS_ERROR_WIFI_NOTCONNECTED;
     }
@@ -198,6 +253,7 @@ void setup(){
 }
 
 void loop(){
+  
   if (Serial.available() > 0) {
       // Read the incoming data
       String incomingData = Serial.readStringUntil('\n');
@@ -209,6 +265,9 @@ void loop(){
       switch(requestType(incomingData)){
         case REQUEST_TYPE_READ_STATUS:
           Serial.print(getStatus().c_str());
+          break;
+        case REQUEST_TYPE_OWNER_PRINCIPAL:
+          //processOwnerPrincipal(incomingData);
           break;
         case REQUEST_TYPE_ERROR:
           Serial.print(getError("Invalid message").c_str());
