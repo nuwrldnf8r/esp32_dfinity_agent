@@ -47,6 +47,7 @@ Preferences preferences;
 #define RFM95_INT 26
 
 #define MAGIC_PREFIX "ESMSG"
+#define PACKET_PREFIX "ESP"
 
 #define STATUS_INITIALIZING 0x00
 #define STATUS_INITIALIZED 0x01
@@ -259,6 +260,17 @@ void printVector(const std::vector<uint8_t>& vec, const String& name) {
     Serial.println();
 }
 
+void uploadData(const std::vector<uint8_t>& data){
+  Serial.println("Uploading data");
+  try{
+    HttpAgent agent(canisterId, keypair);
+    std::vector<Parameter> args = {Parameter(data)};
+    std::vector<Parameter> result = agent.update("upload_data", args);
+    Serial.println("Data uploaded");
+  } catch(const std::exception& e){
+    Serial.printf("Exception: %s\n", e.what());
+  }
+}
 
 void setup(){
   Serial.begin(9600); //115200
@@ -273,7 +285,7 @@ void setup(){
   
   
   
-   std::vector<uint8_t> private_key = readVector("pk");
+  std::vector<uint8_t> private_key = readVector("pk");
   if(private_key.size() > 0){
     keypair.initialize(private_key);
   } else {
@@ -382,12 +394,42 @@ void loop(){
   int packetSize = LoRa.parsePacket();
   if (packetSize) {
     // Read packet
-    Serial.print("Received packet: ");
-    while (LoRa.available()) {
-      Serial.print((char)LoRa.read());
+    std::vector<uint8_t> packet;
+    while (LoRa.available() && packet.size() < packetSize) {
+      packet.push_back(LoRa.read());
     }
-    Serial.println();
+    if(validatePacket(packet)){
+      Serial.println("Valid packet");
+      std::vector<uint8_t> _packet = {packet.begin() + strlen(PACKET_PREFIX), packet.end()};
+    } else {
+      Serial.println("Invalid packet");
+    }
   }
   
   
+}
+
+bool validatePacket(const std::vector<uint8_t>& packet){
+  Serial.println("Validating packet:");
+  
+  if(packet.size() < strlen(PACKET_PREFIX) + 4 + 6){
+    Serial.println("Invalid packet size");
+    return false;
+  }
+  std::string prefix = Utils::vector_to_string({packet.begin(), packet.begin() + strlen(PACKET_PREFIX)});
+  if(prefix != PACKET_PREFIX){
+    Serial.println("Invalid prefix");
+    return false;
+  }
+  std::vector<uint8_t> _packet = {packet.begin()+strlen(PACKET_PREFIX), packet.end()};
+  //validate checksum
+  std::vector<uint8_t> chk_1(_packet.begin(), _packet.begin() +4);
+  std::vector<uint8_t> to_hash(_packet.begin() + 4, _packet.end());
+  std::vector<uint8_t> chk_2 = Utils::sha256(to_hash);
+  chk_2 = std::vector<uint8_t>(chk_2.begin(), chk_2.begin() + 4);
+  if(chk_1 != chk_2){
+    Serial.println("Invalid checksum");
+    return false;
+  }
+  return true;
 }

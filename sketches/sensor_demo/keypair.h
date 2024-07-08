@@ -18,8 +18,10 @@ public:
     bool isInitialized() const { return _is_initialized; }
     std::vector<uint8_t> getPrincipal() const;
     bool verify(const std::vector<unsigned char>& message, const std::vector<uint8_t>& public_key, const std::vector<unsigned char>& signature);
-    std::vector<uint8_t> _public_key;
+    std::vector<uint8_t> publicKey() const { return _public_key; }
+    
 private:
+    std::vector<uint8_t> _public_key;
     std::vector<uint8_t> _private_key;
     std::vector<uint8_t> _public_key_der;
     bool _is_initialized = false;
