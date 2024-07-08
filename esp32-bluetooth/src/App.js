@@ -12,6 +12,7 @@ function App() {
   const [signedIn, setSignedIn] = useState(false)
   const [authClient, setAuthClient] = useState(null)
   const principal = useRef(null)
+  const [serialCom, setSerialCom] = useState('')
 
 
 
@@ -33,14 +34,16 @@ function App() {
   useEffect(() => {
     function sendPrincipal() {
       if (port!==null) {
+        //console.log('sending principal')
         (async () => {
+          
           principal.current = await authClient.getIdentity()
           if(principal.current) {
             console.log('Principal:')
             let _principal = principal.current.getPrincipal().toString()
             console.log(_principal)
-            
-            let msg = 'ESMSG02' + principal + '\n'
+            console.log('sending principal')
+            let msg = 'ESMSG02' + _principal + '\n'
             console.log('msg:', msg)
             const encoder = new TextEncoder()
             const writer = port.writable.getWriter()
@@ -73,6 +76,7 @@ function App() {
 
                   setData((prevOutput) => {
                     let _data = prevOutput + new TextDecoder().decode(value)
+                    setSerialCom(_data)
                     let ar = _data.split('ESMSG')
                     
                     let msg = ar[ar.length-1]
@@ -94,7 +98,14 @@ function App() {
                       } else {
                         return _data
                       }
-                    } else {
+                    } else if(msg.startsWith('04')){
+                      if(msg.length >= 2) {
+                        console.log(msg.substring(2))
+                        return ''
+                      } else {
+                        return _data
+                      }
+                    }else {
                       return _data
                     }
                     
@@ -113,7 +124,7 @@ function App() {
         
       }
     }
-    if(!principal.current)sendPrincipal()
+    if(!principal.current)setTimeout(sendPrincipal,5000)
     const intervalId = setInterval(read, 1000)
     return () => clearInterval(intervalId)
   })
@@ -135,6 +146,7 @@ function App() {
       console.error('Error connecting to the serial port:', error)
       setConnectStatus(0)
       setStatus('')
+      setData('')
     }
   }
 
@@ -156,6 +168,12 @@ function App() {
         return 'REGISTERING'
       case '07':
         return 'REGISTERED'
+      case 'F1':
+        return 'ERROR_WIFI_NOT_CONNECTED'
+      case 'F2':
+        return 'ERROR_PRINCIPAL_MISMATCH'
+      case 'F3':
+        return 'ERROR_FETCH_LOCAL_TIME'
       case '':
         return 'DISCONNECTED'
       default:
@@ -200,7 +218,7 @@ function App() {
           <div style={{marginBottom: 3, marginTop: 5}}>WIFI Name: <input type="text" onChange={(e) => setSSID(e.target.value)} value={ssid} /></div>
           <div style={{marginBottom: 3}}>Password: <input type="text" onChange={(e) => setPassword(e.target.value)} value={password} /></div>
           <div><button onClick={setWifi}>Update Sensor WIFI settings</button></div>
-          
+          <div><textarea value={serialCom}/></div>
         </div>
       }
     </div>

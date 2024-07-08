@@ -25,9 +25,10 @@ Preferences preferences;
     ssid_length 1 byte, password length 1 byte, ssid, password
   0x02 - Set Owner Principal
   0x03 - Request Principal
-  0x04 - Request Data
+  0x04 - Request Owner Principal
+  0x05 - Request Data
      requestID 32 bytes, data 0-255 bytes
-  0x05 - Cancel Request
+  0x06 - Cancel Request
       requestID 32 bytes
   0xFF - error
     
@@ -41,6 +42,9 @@ Preferences preferences;
   Status 0x06 - registering - waiting for confirmation
   Status 0x07 - registered - ready to receive data
 */
+#define RFM95_CS 5
+#define RFM95_RST 14
+#define RFM95_INT 26
 
 #define MAGIC_PREFIX "ESMSG"
 
@@ -52,24 +56,35 @@ Preferences preferences;
 #define STATUS_NOT_REGISTERED 0x05
 #define STATUS_REGISTERING 0x06
 #define STATUS_REGISTERED 0x07
+#define STATUS_GOT_PRINCIPAL 0x08
+#define STATUS_ERROR_NO_PRINCIPAL 0xF5
+
 #define STATUS_ERROR_WIFI_NOTCONNECTED 0xF1
 #define STATUS_ERROR_PRINCIPAL_MISMATCH 0xF2
+#define STATUS_ERROR_FETCH_LOCAL_TIME 0xF3
 
 #define MESSAGE_TYPE_STATUS 0x00
 #define MESSAGE_TYPE_DATA 0x01
 #define MESSAGE_TYPE_LOGGING 0x02
+#define MESSAGE_TYPE_OWNER_PRINCIPAL 0x04
 #define MESSAGE_TYPE_ERROR 0xFF
 
 #define REQUEST_TYPE_READ_STATUS 0x00
 #define REQUEST_TYPE_WIFI_CREDENTIALS 0x01
 #define REQUEST_TYPE_OWNER_PRINCIPAL 0x02
 #define REQUEST_TYPE_REQUEST_PRINCIPAL 0x03
-#define REQUEST_TYPE_REQUEST_DATA 0x04
-#define REQUEST_TYPE_CANCEL_REQUEST 0x05
+#define REQUEST_TYPE_REQUEST_OWNER_PRINCIPAL 0x04
+#define REQUEST_TYPE_REQUEST_DATA 0x05
+#define REQUEST_TYPE_CANCEL_REQUEST 0x06
 #define REQUEST_TYPE_ERROR 0xFF
 
 
+const std::string canisterId = "trr4d-jiaaa-aaaak-akvea-cai";
+const char* ntpServer = "pool.ntp.org";
+const long  gmtOffset_sec = 0;
+const int   daylightOffset_sec = 0;
 
+bool timeInitialized = false;
 bool deviceConnected = false;
 uint8_t status_;
 int value = 0;
@@ -86,10 +101,35 @@ void log(const std::string& message){
 bool isRegistered(){
   if(isRegistered_) return true;
   //check on the network
-  return false;
+  Serial.println("Checking if registered");
+  try{
+    HttpAgent agent(canisterId, keypair);
+    std::vector<Parameter> args = {};
+    std::vector<Parameter> result = agent.query("is_registered", args);
+    if(result.size() > 0){
+      isRegistered_ = result[0].parseBool()==true;
+      Serial.println("Is registered: " + String(isRegistered_));
+      return isRegistered_;
+    } else {
+      return false;
+    }
+  } catch(const std::exception& e){
+    Serial.printf("Exception: %s\n", e.what());
+    return false;
+  } 
+  //return false;
 }
 
 void registerOnNetwork(){
+  Serial.println("Registering on network");
+  try{
+    HttpAgent agent(canisterId, keypair);
+    std::vector<Parameter> args = {Parameter(principal_)};
+    std::vector<Parameter> result = agent.update("register", args);
+    Serial.println("Registered on network");
+  } catch(const std::exception& e){
+    Serial.printf("Exception: %s\n", e.what());
+  }
 
 }
 
@@ -117,6 +157,8 @@ void processWifiCredentials(const String& wifi_credentials){
     } else {
         status_ = STATUS_ERROR_WIFI_NOTCONNECTED;
     }
+
+    
     
 }
 
@@ -125,6 +167,8 @@ void processOwnerPrincipal(const String& owner_principal){
     String _principal = owner_principal.substring(strlen(MAGIC_PREFIX) + 2);
     //check if principal exists 
     if(principal_.length()>0){
+        Serial.println("Principal exists");
+        Serial.println(principal_.c_str());
         //if exists, check if == stored principal
         if(principal_ != _principal.c_str()){
             //if not, error
@@ -134,6 +178,8 @@ void processOwnerPrincipal(const String& owner_principal){
         }
     } else {
         //if not - store
+        Serial.println("Storing principal:");
+        Serial.println(_principal.c_str());
         principal_ = _principal.c_str();
         writeVector("principal", Utils::string_to_vector(principal_));
     }
@@ -175,6 +221,10 @@ std::string getError(const std::string& error){
   return MAGIC_PREFIX + Utils::bytes_to_hex({MESSAGE_TYPE_ERROR}) + error;
 }
 
+std::string getRequest(const uint8_t& requestType, const std::string& data){
+  return MAGIC_PREFIX + Utils::bytes_to_hex({requestType}) + data;
+}
+
 uint8_t requestType(const String& data){
   if(data.length() < strlen(MAGIC_PREFIX) + 2){
     return REQUEST_TYPE_ERROR;
@@ -212,10 +262,16 @@ void printVector(const std::vector<uint8_t>& vec, const String& name) {
 
 void setup(){
   Serial.begin(9600); //115200
+  while (!Serial);
+
   preferences.begin("_", false);
   //preferences.clear();
   //preferences.end();
 
+  Serial.println("Initializing LoRa module...");
+  LoRa.setPins(RFM95_CS, RFM95_RST, RFM95_INT);
+  
+  
   
    std::vector<uint8_t> private_key = readVector("pk");
   if(private_key.size() > 0){
@@ -232,8 +288,12 @@ void setup(){
   std::vector<uint8_t> _principal = readVector("principal");
   if(_principal.size() > 0){
     principal_ = Utils::vector_to_string(_principal);
+    Serial.print("Principal: ");
+    Serial.println(principal_.c_str());
     //check if registered on the network
-  } 
+  } else {
+    Serial.println("No principal found");
+  }
   
   //get wifi credientials from storage
   std::vector<uint8_t> ssid_ = readVector("ssid");
@@ -241,7 +301,9 @@ void setup(){
   if(ssid_.size() > 0 && password_.size() > 0){
     setWIFI(Utils::vector_to_string(ssid_).c_str(), Utils::vector_to_string(password_).c_str());
     if(WiFi.status() == WL_CONNECTED){
-      status_ = STATUS_CONNECTED;
+      status_ = STATUS_CONNECTED;    
+      configTime(gmtOffset_sec, daylightOffset_sec, ntpServer); 
+      printLocalTime(); 
       if(!isRegistered() && principal_.length()>0){
         registerOnNetwork();
       }
@@ -249,11 +311,38 @@ void setup(){
       status_ = STATUS_ERROR_WIFI_NOTCONNECTED;
     }
   }
+
+  if (!LoRa.begin(433E6)) { // Set frequency to 433 MHz
+    Serial.println("LoRa initialization failed!");
+    while (1);
+  }
   
 }
 
+void printLocalTime() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("Failed to obtain time");
+    return;
+  }
+  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+}
+
 void loop(){
-  
+  /*
+  if(!timeInitialized && WiFi.status() == WL_CONNECTED){
+    struct tm timeinfo;
+    Serial.println("Fetching time");
+    if (!getLocalTime(&timeinfo)) {
+        status_ = STATUS_ERROR_FETCH_LOCAL_TIME;
+        Serial.println("Failed to get time");
+    } else {
+      Serial.println("Got time");
+      timeInitialized = true;
+    }
+  }
+  */
+ 
   if (Serial.available() > 0) {
       // Read the incoming data
       String incomingData = Serial.readStringUntil('\n');
@@ -267,7 +356,9 @@ void loop(){
           Serial.print(getStatus().c_str());
           break;
         case REQUEST_TYPE_OWNER_PRINCIPAL:
-          //processOwnerPrincipal(incomingData);
+          status_ = STATUS_GOT_PRINCIPAL;
+          Serial.print(getStatus().c_str());
+          processOwnerPrincipal(incomingData);
           break;
         case REQUEST_TYPE_ERROR:
           Serial.print(getError("Invalid message").c_str());
@@ -275,12 +366,27 @@ void loop(){
         case REQUEST_TYPE_WIFI_CREDENTIALS:
           processWifiCredentials(incomingData);
           break;
+        case REQUEST_TYPE_REQUEST_OWNER_PRINCIPAL:
+          
+
+          Serial.print(getRequest(MESSAGE_TYPE_OWNER_PRINCIPAL, principal_).c_str());
+          break;
         default:
           Serial.print(getError("Unknown request").c_str());
           break;
       }
       //Serial.print(getStatus().c_str());
 
+  }
+
+  int packetSize = LoRa.parsePacket();
+  if (packetSize) {
+    // Read packet
+    Serial.print("Received packet: ");
+    while (LoRa.available()) {
+      Serial.print((char)LoRa.read());
+    }
+    Serial.println();
   }
   
   

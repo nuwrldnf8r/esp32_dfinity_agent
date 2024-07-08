@@ -9,41 +9,20 @@
 #include <mbedtls/asn1write.h>
 #include <mbedtls/ecp.h>
 #include <mbedtls/bignum.h>
+#include <cppcodec/base32_rfc4648.hpp>
 #include <cstdint>
 #include <map>
 //#include <cppcodec/base32_rfc4648.hpp>
 #include <sstream>
 
 
-//using base32 = cppcodec::base32_rfc4648;
+using base32 = cppcodec::base32_rfc4648;
 
 Utils::Utils() {}
 
 std::vector<uint8_t> base32Decode(const std::string& encoded) {
-    const char base32Chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-    std::vector<uint8_t> data;
-    int buffer = 0;
-    int bitsLeft = 0;
-    int count = 0;
-    for (char c : encoded) {
-        if (c == '=' || c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '-') {
-            continue;
-        }
-        buffer <<= 5;
-        if (c >= 'A' && c <= 'Z') {
-            buffer |= (c - 'A');
-        } else if (c >= '2' && c <= '7') {
-            buffer |= (c - '2' + 26);
-        } else {
-            throw std::invalid_argument("Invalid character in Base32 string");
-        }
-        bitsLeft += 5;
-        if (bitsLeft >= 8) {
-            data.push_back(buffer >> (bitsLeft - 8));
-            bitsLeft -= 8;
-        }
-    }
-    return data;
+    std::vector<uint8_t> decoded = base32::decode(encoded);
+    return decoded;
 }
 
 // LEB128 encoding
@@ -112,28 +91,8 @@ std::vector<uint8_t> Utils::uncook(const std::string& input) {
 }
 
 // Function to encode raw bytes back to base32
-std::string Utils::base32Encode(const std::vector<uint8_t>& data) {
-    const char base32Chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-    std::string encoded;
-    int buffer = data[0];
-    int next = 1;
-    int bitsLeft = 8;
-    while (bitsLeft > 0 || next < data.size()) {
-        if (bitsLeft < 5) {
-            if (next < data.size()) {
-                buffer <<= 8;
-                buffer |= data[next++] & 0xFF;
-                bitsLeft += 8;
-            } else {
-                int pad = 5 - bitsLeft;
-                buffer <<= pad;
-                bitsLeft += pad;
-            }
-        }
-        int index = 0x1F & (buffer >> (bitsLeft - 5));
-        encoded += base32Chars[index];
-        bitsLeft -= 5;
-    }
+std::string Utils::base32Encode(const std::vector<uint8_t>& input) {
+    std::string encoded = base32::encode(input);
     
     // Insert dashes to match the format
     std::string result;

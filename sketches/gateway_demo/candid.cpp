@@ -171,6 +171,12 @@ std::vector<Parameter> Candid::decode() {
                 result.push_back(Parameter(value));
                 break;
             }
+            case 0x7e:  // Bool type (unsure about this - but this is what the canister is giving back)
+            {
+                bool value = readByte() != 0x00;
+                result.push_back(Parameter(value));
+                break;
+            }
             case 0x7f:  // Blob type
             {
                 uint64_t length = leb128Decode();
