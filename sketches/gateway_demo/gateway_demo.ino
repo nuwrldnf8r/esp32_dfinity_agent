@@ -128,6 +128,7 @@ void registerOnNetwork(){
     std::vector<Parameter> args = {Parameter(principal_)};
     std::vector<Parameter> result = agent.update("register", args);
     Serial.println("Registered on network");
+    status_ = STATUS_REGISTERED;
   } catch(const std::exception& e){
     Serial.printf("Exception: %s\n", e.what());
   }
@@ -318,6 +319,8 @@ void setup(){
       printLocalTime(); 
       if(!isRegistered() && principal_.length()>0){
         registerOnNetwork();
+      } else {
+        status_ = STATUS_REGISTERED;
       }
     } else {
       status_ = STATUS_ERROR_WIFI_NOTCONNECTED;
@@ -368,9 +371,12 @@ void loop(){
           Serial.print(getStatus().c_str());
           break;
         case REQUEST_TYPE_OWNER_PRINCIPAL:
-          status_ = STATUS_GOT_PRINCIPAL;
-          Serial.print(getStatus().c_str());
-          processOwnerPrincipal(incomingData);
+          if(principal_.length() == 0){
+            status_ = STATUS_GOT_PRINCIPAL;
+            Serial.print(getStatus().c_str());
+            processOwnerPrincipal(incomingData);
+          }
+          
           break;
         case REQUEST_TYPE_ERROR:
           Serial.print(getError("Invalid message").c_str());

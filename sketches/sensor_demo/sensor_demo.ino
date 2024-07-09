@@ -167,7 +167,7 @@ void loop() {
     Serial.println("creating packet");
     sendPacket(createPacket());
   
-  delay(30000);
+  delay(60000);
 }
 
 
