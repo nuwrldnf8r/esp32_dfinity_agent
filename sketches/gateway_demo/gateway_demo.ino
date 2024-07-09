@@ -80,7 +80,7 @@ Preferences preferences;
 #define REQUEST_TYPE_ERROR 0xFF
 
 
-const std::string canisterId = "trr4d-jiaaa-aaaak-akvea-cai";
+const std::string canisterId = "ddya3-4iaaa-aaaak-akwka-cai";
 const char* ntpServer = "pool.ntp.org";
 const long  gmtOffset_sec = 0;
 const int   daylightOffset_sec = 0;
@@ -260,7 +260,7 @@ void printVector(const std::vector<uint8_t>& vec, const String& name) {
     Serial.println();
 }
 
-void uploadData(const std::vector<uint8_t>& data){
+void uploadData(const std::string& data){
   Serial.println("Uploading data");
   try{
     HttpAgent agent(canisterId, keypair);
@@ -401,6 +401,9 @@ void loop(){
     if(validatePacket(packet)){
       Serial.println("Valid packet");
       std::vector<uint8_t> _packet = {packet.begin() + strlen(PACKET_PREFIX), packet.end()};
+      std::string hex = Utils::bytes_to_hex(_packet);
+      Serial.println(hex.c_str());
+      uploadData(hex);
     } else {
       Serial.println("Invalid packet");
     }
@@ -411,6 +414,7 @@ void loop(){
 
 bool validatePacket(const std::vector<uint8_t>& packet){
   Serial.println("Validating packet:");
+  
   
   if(packet.size() < strlen(PACKET_PREFIX) + 4 + 6){
     Serial.println("Invalid packet size");

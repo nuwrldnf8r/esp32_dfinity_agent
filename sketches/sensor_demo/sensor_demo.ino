@@ -47,7 +47,6 @@ std::string field(const uint8_t& name, const std::string& value) {
 }
 
 std::string field(const uint8_t& name, std::vector<uint8_t>& value) {
-    
     uint8_t size = static_cast<uint8_t>(value.size());
     return Utils::bytes_to_hex({name}) + Utils::bytes_to_hex({size}) + Utils::bytes_to_hex(value);
 }
@@ -65,14 +64,14 @@ std::vector<uint8_t> createPacket() {
     unsigned long start = millis();
     float latitude, longitude, altitude;
     bool gpsDataAvailable = false;
-    while (millis() - start < 1000) { // Timeout after 1000 milliseconds (adjust as needed)
+    while (millis() - start < 2000) { // Timeout after 1000 milliseconds (adjust as needed)
         if (GPS_SERIAL.available() > 0) {
             if (gps.encode(GPS_SERIAL.read())) {
-                gpsDataAvailable = true;
                 // If new GPS data is available, print it
                 if (gps.location.isValid()) {
                     latitude = gps.location.lat();
                     longitude = gps.location.lng();
+                    gpsDataAvailable = true;
                 }
                 if (gps.altitude.isValid()){
                     altitude = gps.altitude.meters();
@@ -168,7 +167,7 @@ void loop() {
     Serial.println("creating packet");
     sendPacket(createPacket());
   
-  delay(5000);
+  delay(30000);
 }
 
 
