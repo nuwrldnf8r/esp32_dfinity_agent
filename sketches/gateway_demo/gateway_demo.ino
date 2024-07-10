@@ -344,19 +344,6 @@ void printLocalTime() {
 }
 
 void loop(){
-  /*
-  if(!timeInitialized && WiFi.status() == WL_CONNECTED){
-    struct tm timeinfo;
-    Serial.println("Fetching time");
-    if (!getLocalTime(&timeinfo)) {
-        status_ = STATUS_ERROR_FETCH_LOCAL_TIME;
-        Serial.println("Failed to get time");
-    } else {
-      Serial.println("Got time");
-      timeInitialized = true;
-    }
-  }
-  */
  
   if (Serial.available() > 0) {
       // Read the incoming data
