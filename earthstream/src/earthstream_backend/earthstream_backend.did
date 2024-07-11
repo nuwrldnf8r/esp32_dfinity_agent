@@ -1,0 +1,29 @@
+type Data = record {
+  ts: nat64;
+  data: text;
+};
+
+type ParsedData = record {
+    ts: nat64;
+    temp: text;
+    humidity: text;
+    light_intensity: text;
+    latitude: text;
+    longitude: text;
+    altitude: text;
+    public_key: text;
+    signature: text;
+}
+
+service : {
+    register: (text) -> ();
+    upload_data: (text) -> ();
+    is_registered: () -> (bool) query;
+    check_valid: (text) -> (bool) query;
+    get_owner: () -> (text) query;
+    get_all_data: () -> (vec Data) query;
+    get_data: (nat64) -> (vec Data) query;
+    get_data_by_owner: (principal, nat64, nat64) -> (vec Data) query;
+    parse_data: (nat64, text) -> (ParsedData) query;
+    get_parsed_data: (nat64) -> (vec ParsedData) query;
+}

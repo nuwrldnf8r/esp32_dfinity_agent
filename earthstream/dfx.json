@@ -1,0 +1,32 @@
+{
+  "canisters": {
+    "earthstream_backend": {
+      "candid": "src/earthstream_backend/earthstream_backend.did",
+      "package": "earthstream_backend",
+      "type": "rust"
+    },
+    "earthstream_frontend": {
+      "dependencies": [
+        "earthstream_backend"
+      ],
+      "source": [
+        "src/earthstream_frontend/dist"
+      ],
+      "type": "assets",
+      "workspace": "earthstream_frontend",
+      "headers": {
+        "/": {
+          "Permissions-Policy": "serial=(self)"
+        }
+      }
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
