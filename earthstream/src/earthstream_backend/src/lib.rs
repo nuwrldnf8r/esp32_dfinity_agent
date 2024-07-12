@@ -8,7 +8,7 @@ use candid::Principal;
 use ic_cdk::api;
 use candid::CandidType;
 use serde::Deserialize;
-//use libsecp256k1::*;
+use libsecp256k1::*;
 //use util::make_unsafe_rng;
 
 
@@ -169,12 +169,9 @@ fn check_valid(data: String) -> bool{
 }
 
 fn check_sig(_public_key: &[u8], _signature: &[u8], _data: &[u8]) -> bool {
-    /*
-    let mut rng: ChaCha20Rng = make_unsafe_rng();
-    let mut ret: [u8; 32] = [0u8; 32];
-    rng.fill_bytes(&mut ret);
-    
-    let mut pub_key: [u8; 65] = [0x04; 65];
+
+    let mut pub_key = [0u8; 65];
+    pub_key[0] = 0x04;
     let mut msg: [u8; 32] = [0; 32];
     let mut sig: [u8; 64] = [0; 64];
     pub_key[1..].copy_from_slice(_public_key);
@@ -184,29 +181,26 @@ fn check_sig(_public_key: &[u8], _signature: &[u8], _data: &[u8]) -> bool {
     let message: Message = Message::parse(&msg);
     let sig: Signature = Signature::parse_standard(&sig).unwrap();
     libsecp256k1::verify(&message, &sig, &pubkey)
-    */
+    
 
     /*
     TODO: Implement random: https://docs.rs/getrandom/latest/getrandom/fn.getrandom.html
     https://docs.rs/getrandom/latest/getrandom/#webassembly-support - see custom implementations
     https://docs.rs/libsecp256k1/latest/libsecp256k1/index.html
      */
-    true
+    //true
 }
 
 fn is_valid(data: Vec<u8>) -> bool{
     //get first 4 bytes
     let chk = &data[0..4];
-    //calculate sha256 of the rest of the data
+    //calculate checksum (first 4 bytes of sha256 of the rest of the data)
     let mut hasher = Sha256::new();
     hasher.update(&data[4..]);
     let hash_result = hasher.finalize();
     if chk != &hash_result[0..4] {
         return false;
     }
-    //ignoring signature for now
-    
-    //let gateway = caller();
     
     //get signature 
     let data = data[4..].to_vec();
@@ -215,16 +209,21 @@ fn is_valid(data: Vec<u8>) -> bool{
     }
     let ln = data[1];
     let sig = &data[2..2+ln as usize];
-    if data[2+ln as usize]!=FIELD_PUBLIC_KEY {
+    let data = &data[2+ln as usize..];
+    if data[0]!=FIELD_PUBLIC_KEY {
         panic!("Public key must be second field");
     }
-    let ln = data[3+ln as usize];
-    let public_key = &data[4+ln as usize..4+ln as usize+ln as usize];
+
+    let ln = data[1];
+    let ln = ln as usize;
+
+    let public_key = &data[2..2+ln];
+
     //get message to validate with signature and DER public key
-    let to_hash = &data[3+ln as usize..];
     let mut hasher = Sha256::new();
-    hasher.update(to_hash);
+    hasher.update(data);
     let hash_result = hasher.finalize();
+
     if !check_sig(public_key, sig, &hash_result) {
         return false;
     }
